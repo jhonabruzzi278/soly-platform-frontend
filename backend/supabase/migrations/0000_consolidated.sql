@@ -1399,3 +1399,35 @@ grant execute on function public.cancel_flow_subscription(text) to service_role;
 insert into public.tenants (slug, business_name, plan, product)
 values ('default', 'Default Tenant', 'starter', 'soly')
 on conflict (slug) do nothing;
+
+-- ============================================================================
+-- Storage RLS (tenant file isolation)
+-- ============================================================================
+
+-- Each tenant sees only their own files (path = {tenant_id}/*)
+create policy "tenant_files_select"
+on storage.objects for select
+using (
+  bucket_id = 'excel-files'
+  and (storage.foldername(name))[1] = (
+    select tenant_id::text from public.memberships
+    where user_id = auth.uid() limit 1
+  )
+);
+
+create policy "tenant_files_insert"
+on storage.objects for insert
+with check (
+  bucket_id = 'excel-files'
+  and auth.role() = 'authenticated'
+);
+
+create policy "tenant_files_delete"
+on storage.objects for delete
+using (
+  bucket_id = 'excel-files'
+  and (storage.foldername(name))[1] = (
+    select tenant_id::text from public.memberships
+    where user_id = auth.uid() limit 1
+  )
+);

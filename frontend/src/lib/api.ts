@@ -3,8 +3,10 @@ import { StorageFile, Tenant, Membership, InviteMemberPayload, DashboardKpi, Cus
 
 const BUCKET_NAME = import.meta.env.VITE_SUPABASE_BUCKET ?? "excel-files";
 
-export const uploadExcelFile = async (file: File): Promise<StorageFile> => {
-  const path = `${Date.now()}-${file.name}`;
+const tenantPath = (tenantId: string, filename: string) => `${tenantId}/${filename}`;
+
+export const uploadExcelFile = async (tenantId: string, file: File): Promise<StorageFile> => {
+  const path = tenantPath(tenantId, `${Date.now()}-${file.name}`);
   const { data, error } = await supabase.storage
     .from(BUCKET_NAME)
     .upload(path, file, { contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
@@ -22,15 +24,18 @@ export const uploadExcelFile = async (file: File): Promise<StorageFile> => {
   };
 };
 
-export const listExcelFiles = async (): Promise<StorageFile[]> => {
-  const { data, error } = await supabase.storage.from(BUCKET_NAME).list();
+export const listExcelFiles = async (tenantId: string): Promise<StorageFile[]> => {
+  const { data, error } = await supabase.storage.from(BUCKET_NAME).list(tenantId, {
+    sortBy: { column: "created_at", order: "desc" }
+  });
 
   if (error) throw error;
 
   return (data ?? [])
-    .filter((item) => item.name.endsWith(".xlsx") || item.name.endsWith(".xls"))
+    .filter((item) => item.name.endsWith(".xlsx") || item.name.endsWith(".xls") || item.name.endsWith(".csv"))
     .map((item) => {
-      const { data: urlData } = supabase.storage.from(BUCKET_NAME).getPublicUrl(item.name);
+      const filePath = tenantPath(tenantId, item.name);
+      const { data: urlData } = supabase.storage.from(BUCKET_NAME).getPublicUrl(filePath);
 
       return {
         name: item.name,
@@ -39,12 +44,12 @@ export const listExcelFiles = async (): Promise<StorageFile[]> => {
         size: item.metadata?.size ?? 0,
         url: urlData.publicUrl
       };
-    })
-    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    });
 };
 
-export const deleteExcelFile = async (fileName: string) => {
-  const { error } = await supabase.storage.from(BUCKET_NAME).remove([fileName]);
+export const deleteExcelFile = async (tenantId: string, fileName: string) => {
+  const path = tenantPath(tenantId, fileName);
+  const { error } = await supabase.storage.from(BUCKET_NAME).remove([path]);
   if (error) throw error;
 };
 

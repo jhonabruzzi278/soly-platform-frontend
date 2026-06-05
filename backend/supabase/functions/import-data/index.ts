@@ -130,7 +130,7 @@ serve(async (req) => {
 
     const { data: fileData, error: downloadError } = await adminClient.storage
       .from("excel-files")
-      .download(file_path);
+      .download(`${tenant_id}/${file_path}`);
 
     if (downloadError) throw downloadError;
 

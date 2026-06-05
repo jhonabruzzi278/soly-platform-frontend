@@ -38,8 +38,9 @@ export const ExcelUploadPage = () => {
   const [preview, setPreview] = useState<PreviewData | null>(null);
 
   const files = useQuery({
-    queryKey: ["storage-files"],
-    queryFn: listExcelFiles
+    queryKey: ["storage-files", tenant?.id],
+    queryFn: () => listExcelFiles(tenant!.id),
+    enabled: !!tenant
   });
 
   const handleUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -56,9 +57,9 @@ export const ExcelUploadPage = () => {
     setMessage(null);
 
     try {
-      const uploaded = await uploadExcelFile(file);
+      const uploaded = await uploadExcelFile(tenant!.id, file);
       setMessage(`Archivo "${uploaded.name}" subido.`);
-      await queryClient.invalidateQueries({ queryKey: ["storage-files"] });
+      await queryClient.invalidateQueries({ queryKey: ["storage-files", tenant?.id] });
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo subir el archivo.");
     } finally {
@@ -71,9 +72,9 @@ export const ExcelUploadPage = () => {
     setError(null);
     setMessage(null);
     try {
-      await deleteExcelFile(fileName);
+      await deleteExcelFile(tenant!.id, fileName);
       setMessage(`Archivo "${fileName}" eliminado.`);
-      await queryClient.invalidateQueries({ queryKey: ["storage-files"] });
+      await queryClient.invalidateQueries({ queryKey: ["storage-files", tenant?.id] });
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo eliminar el archivo.");
     }
@@ -116,7 +117,7 @@ export const ExcelUploadPage = () => {
         setError(`${data.errors.length} errores.`);
       }
       setImportModal(false);
-      await queryClient.invalidateQueries({ queryKey: ["storage-files"] });
+      await queryClient.invalidateQueries({ queryKey: ["storage-files", tenant?.id] });
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo importar.");
     } finally {
