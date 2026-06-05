@@ -1,0 +1,19 @@
+﻿# Dependencies
+frontend/node_modules/
+
+# Build
+frontend/dist/
+frontend/dev-dist/
+frontend/tsconfig.tsbuildinfo
+
+# Env
+frontend/.env
+backend/.env
+
+# Supabase
+backend/.supabase/
+backend/supabase/.temp/
+
+# OS
+.DS_Store
+Thumbs.db

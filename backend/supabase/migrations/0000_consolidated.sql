@@ -1,0 +1,1401 @@
+-- ============================================================================
+-- Soly CRM - Consolidated Schema
+-- Generated from migrations 20260324170000 through 20260604010000
+-- SaaS multi-tenant + Flow.cl retained (organizations → tenants)
+-- ============================================================================
+
+-- ============================================================================
+-- Extensions
+-- ============================================================================
+create extension if not exists pgcrypto;
+create extension if not exists citext;
+
+-- ============================================================================
+-- Enums
+-- ============================================================================
+do $$
+begin
+  if not exists (select 1 from pg_type where typname = 'user_role') then
+    create type public.user_role as enum ('admin', 'barber');
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_enum enum
+    join pg_type typ on typ.oid = enum.enumtypid
+    where typ.typname = 'user_role'
+      and enum.enumlabel = 'operator'
+  ) then
+    alter type public.user_role add value 'operator' after 'admin';
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (select 1 from pg_type where typname = 'inventory_movement_type') then
+    create type public.inventory_movement_type as enum ('in', 'out', 'adjustment');
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (select 1 from pg_type where typname = 'plan_name') then
+    create type public.plan_name as enum ('starter', 'pro', 'business', 'enterprise');
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (select 1 from pg_type where typname = 'org_role') then
+    create type public.org_role as enum ('owner', 'admin', 'member', 'viewer');
+  end if;
+end $$;
+
+-- ============================================================================
+-- Tables
+-- ============================================================================
+
+-- Tenants – must be created first (FK target)
+create table if not exists public.tenants (
+  id uuid primary key default gen_random_uuid(),
+  slug text unique not null,
+  business_name text not null,
+  business_subtitle text,
+  plan public.plan_name not null default 'starter',
+  product text not null default 'soly',
+  flow_subscription_id text,
+  flow_customer_email text,
+  is_active boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+-- Profiles
+create table if not exists public.profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  email citext not null unique,
+  full_name text,
+  role public.user_role not null default 'barber',
+  is_active boolean not null default true,
+  active_session_nonce uuid,
+  active_session_claimed_at timestamptz,
+  tenant_id uuid references public.tenants(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+-- Memberships
+create table if not exists public.memberships (
+  tenant_id uuid references public.tenants(id) on delete cascade,
+  user_id uuid references auth.users(id) on delete cascade,
+  role public.org_role not null default 'member',
+  created_at timestamptz not null default now(),
+  primary key (tenant_id, user_id)
+);
+
+-- Tenant Seats
+create table if not exists public.tenant_seats (
+  tenant_id uuid references public.tenants(id) on delete cascade,
+  user_id uuid references auth.users(id) on delete cascade,
+  is_active boolean not null default true,
+  assigned_at timestamptz not null default now(),
+  primary key (tenant_id, user_id)
+);
+
+-- Tenant Products (plan product flags)
+create table if not exists public.tenant_products (
+  tenant_id uuid references public.tenants(id) on delete cascade,
+  product_key text not null,
+  enabled_at timestamptz not null default now(),
+  primary key (tenant_id, product_key)
+);
+
+-- Allowed Emails (invite whitelist)
+create table if not exists public.allowed_emails (
+  id uuid primary key default gen_random_uuid(),
+  email citext not null unique,
+  is_active boolean not null default true,
+  created_at timestamptz not null default now()
+);
+
+-- Customers
+create table if not exists public.customers (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  email text,
+  email_alt text,
+  phone text,
+  phone_alt_1 text,
+  phone_alt_2 text,
+  company text,
+  address text,
+  notes text,
+  tags text[] not null default '{}',
+  total_spent numeric(12,2) not null default 0,
+  total_appointments integer not null default 0,
+  last_appointment_at timestamptz,
+  next_appointment_at timestamptz,
+  tenant_id uuid references public.tenants(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+-- Appointments
+create table if not exists public.appointments (
+  id uuid primary key default gen_random_uuid(),
+  customer_id uuid not null references public.customers(id) on delete cascade,
+  barber_id uuid references public.profiles(id) on delete set null,
+  appointment_date date not null,
+  appointment_time time not null,
+  service_name text not null,
+  cost numeric(12,2) not null default 0,
+  status text not null default 'pending',
+  comments text,
+  booked_at timestamptz,
+  address text,
+  city text,
+  state text,
+  country text,
+  postal_code text,
+  external_staff_key text,
+  staff_name text,
+  external_service_id text,
+  tenant_id uuid references public.tenants(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+-- Services
+create table if not exists public.services (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  price numeric(12,2) not null default 0,
+  tenant_id uuid references public.tenants(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+-- Inventory Products
+create table if not exists public.inventory_products (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  supplier text,
+  cost numeric(12,2) not null default 0,
+  sale_price numeric(12,2) not null default 0,
+  stock integer not null default 0,
+  min_stock integer not null default 0,
+  safety_stock integer not null default 0,
+  purchase_date date,
+  tenant_id uuid references public.tenants(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint inventory_products_safety_stock_non_negative check (safety_stock >= 0),
+  constraint inventory_products_min_stock_above_safety check (min_stock >= safety_stock)
+);
+
+-- Inventory Movements
+create table if not exists public.inventory_movements (
+  id uuid primary key default gen_random_uuid(),
+  product_id uuid not null references public.inventory_products(id) on delete cascade,
+  type public.inventory_movement_type not null,
+  quantity integer not null,
+  note text,
+  tenant_id uuid references public.tenants(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+
+-- Customer Technical Profiles
+create table if not exists public.customer_technical_profiles (
+  id uuid primary key default gen_random_uuid(),
+  customer_id uuid not null unique references public.customers(id) on delete cascade,
+  preferred_cut_style text,
+  hair_type text,
+  scalp_condition text,
+  allergies text,
+  color_formula text,
+  extra_notes text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+-- ============================================================================
+-- Indexes
+-- ============================================================================
+create index if not exists idx_allowed_emails_email on public.allowed_emails (email);
+
+create index if not exists idx_customers_name on public.customers (name);
+create index if not exists idx_customers_email on public.customers (email);
+
+create index if not exists idx_appointments_customer on public.appointments (customer_id);
+create index if not exists idx_appointments_barber on public.appointments (barber_id);
+create index if not exists idx_appointments_date on public.appointments (appointment_date);
+create index if not exists idx_appointments_status on public.appointments (status);
+create index if not exists idx_appointments_external_staff_key on public.appointments (external_staff_key);
+create index if not exists idx_appointments_external_service_id on public.appointments (external_service_id);
+
+create index if not exists idx_inventory_movements_product on public.inventory_movements (product_id);
+
+create index if not exists idx_profiles_active_session_nonce on public.profiles (active_session_nonce);
+
+create index if not exists idx_customer_technical_profiles_customer on public.customer_technical_profiles(customer_id);
+
+-- ============================================================================
+-- Functions (helpers)
+-- ============================================================================
+
+-- updated_at trigger helper
+create or replace function public.set_updated_at()
+returns trigger as $$
+begin
+  NEW.updated_at = now();
+  return NEW;
+end;
+$$ language plpgsql;
+
+-- Role checks
+create or replace function public.is_admin(uid uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.profiles p
+    where p.id = uid
+      and lower(p.role::text) = 'admin'
+      and coalesce(p.is_active, true) = true
+  );
+$$;
+
+create or replace function public.is_operator(uid uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.profiles p
+    where p.id = uid
+      and p.role = 'operator'
+      and p.is_active = true
+  );
+$$;
+
+create or replace function public.is_admin_or_operator(uid uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.profiles p
+    where p.id = uid
+      and p.role in ('admin', 'operator')
+      and p.is_active = true
+  );
+$$;
+
+-- Tenant helpers (SaaS multi-tenant)
+create or replace function public.get_current_tenant()
+returns uuid as $$
+  select tenant_id
+  from public.memberships
+  where user_id = auth.uid()
+  limit 1;
+$$ language sql stable security definer;
+
+create or replace function public.get_user_tenant_role(org_id uuid)
+returns text as $$
+  select role::text
+  from public.memberships
+  where tenant_id = org_id and user_id = auth.uid();
+$$ language sql stable security definer;
+
+create or replace function public.is_tenant_admin(org_id uuid)
+returns boolean as $$
+  select exists (
+    select 1 from public.memberships
+    where tenant_id = org_id
+      and user_id = auth.uid()
+      and role in ('owner', 'admin')
+  );
+$$ language sql stable security definer;
+
+create or replace function public.get_tenant_seats_count(org_id uuid)
+returns bigint as $$
+  select count(*)
+  from public.tenant_seats
+  where tenant_id = org_id and is_active = true;
+$$ language sql stable;
+
+-- ============================================================================
+-- Functions (business logic)
+-- ============================================================================
+
+-- Get current profile (securely, bypasses RLS)
+create or replace function public.get_current_profile()
+returns table (
+  id uuid,
+  email text,
+  full_name text,
+  role public.user_role,
+  is_active boolean
+)
+language sql
+security definer
+set search_path = public
+as $$
+  select
+    p.id,
+    p.email::text,
+    p.full_name,
+    case
+      when lower(p.role::text) = 'admin' then 'admin'::public.user_role
+      when lower(p.role::text) = 'operator' then 'operator'::public.user_role
+      else 'barber'::public.user_role
+    end as role,
+    p.is_active
+  from public.profiles p
+  where p.id = auth.uid()
+  limit 1;
+$$;
+
+-- Single-session controls
+create or replace function public.claim_current_profile_session(p_session_nonce uuid)
+returns table (
+  id uuid,
+  email text,
+  full_name text,
+  role public.user_role,
+  is_active boolean,
+  active_session_nonce uuid
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_profile public.profiles%rowtype;
+begin
+  select *
+  into v_profile
+  from public.profiles
+  where public.profiles.id = auth.uid()
+  limit 1;
+
+  if not found then
+    return;
+  end if;
+
+  if coalesce(v_profile.is_active, false) then
+    update public.profiles
+    set active_session_nonce = p_session_nonce,
+        active_session_claimed_at = now(),
+        updated_at = now()
+    where public.profiles.id = v_profile.id
+    returning * into v_profile;
+  end if;
+
+  return query
+  select
+    v_profile.id,
+    v_profile.email::text,
+    v_profile.full_name,
+    case
+      when lower(v_profile.role::text) = 'admin' then 'admin'::public.user_role
+      when lower(v_profile.role::text) = 'operator' then 'operator'::public.user_role
+      else 'barber'::public.user_role
+    end as role,
+    coalesce(v_profile.is_active, false) as is_active,
+    v_profile.active_session_nonce;
+end;
+$$;
+
+create or replace function public.validate_current_profile_session(p_session_nonce uuid)
+returns table (
+  id uuid,
+  email text,
+  full_name text,
+  role public.user_role,
+  is_active boolean,
+  active_session_nonce uuid,
+  session_valid boolean
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_profile public.profiles%rowtype;
+begin
+  select *
+  into v_profile
+  from public.profiles
+  where public.profiles.id = auth.uid()
+  limit 1;
+
+  if not found then
+    return;
+  end if;
+
+  return query
+  select
+    v_profile.id,
+    v_profile.email::text,
+    v_profile.full_name,
+    case
+      when lower(v_profile.role::text) = 'admin' then 'admin'::public.user_role
+      when lower(v_profile.role::text) = 'operator' then 'operator'::public.user_role
+      else 'barber'::public.user_role
+    end as role,
+    coalesce(v_profile.is_active, false) as is_active,
+    v_profile.active_session_nonce,
+    (
+      coalesce(v_profile.is_active, false)
+      and v_profile.active_session_nonce is not null
+      and v_profile.active_session_nonce = p_session_nonce
+    ) as session_valid;
+end;
+$$;
+
+create or replace function public.release_current_profile_session(p_session_nonce uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  update public.profiles
+  set active_session_nonce = null,
+      active_session_claimed_at = null,
+      updated_at = now()
+  where public.profiles.id = auth.uid()
+    and active_session_nonce = p_session_nonce;
+end;
+$$;
+
+-- Handle new auth user: auto-create profile row
+create or replace function public.handle_new_auth_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  allowed boolean;
+  existing_profile_id uuid;
+  existing_profile_has_auth boolean;
+begin
+  select exists(
+    select 1
+    from public.allowed_emails ae
+    where ae.email = new.email
+      and ae.is_active = true
+  )
+  into allowed;
+
+  select p.id
+  into existing_profile_id
+  from public.profiles p
+  where p.email = new.email
+    and p.id <> new.id
+  limit 1;
+
+  if existing_profile_id is not null then
+    select exists(
+      select 1
+      from auth.users u
+      where u.id = existing_profile_id
+    )
+    into existing_profile_has_auth;
+
+    if existing_profile_has_auth then
+      raise exception 'profiles.email already linked to another auth user: %', new.email
+        using errcode = '23505';
+    else
+      delete from public.profiles
+      where id = existing_profile_id;
+    end if;
+  end if;
+
+  insert into public.profiles (id, email, full_name, role, is_active)
+  values (
+    new.id,
+    new.email,
+    coalesce(new.raw_user_meta_data ->> 'full_name', new.email),
+    'barber',
+    allowed
+  )
+  on conflict (id) do update
+    set email = excluded.email,
+        is_active = excluded.is_active,
+        updated_at = now();
+
+  return new;
+end;
+$$;
+
+-- Guard sensitive profile field updates (non-admin users cannot elevate)
+create or replace function public.guard_profile_sensitive_updates()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if current_user in ('postgres', 'service_role', 'supabase_admin')
+     or coalesce(auth.role(), '') = 'service_role' then
+    NEW.updated_at = now();
+    return NEW;
+  end if;
+
+  if public.is_admin(auth.uid()) then
+    NEW.updated_at = now();
+    return NEW;
+  end if;
+
+  if auth.uid() is null or OLD.id <> auth.uid() then
+    raise exception 'No autorizado para actualizar este perfil';
+  end if;
+
+  if NEW.id is distinct from OLD.id
+     or NEW.email is distinct from OLD.email
+     or NEW.role is distinct from OLD.role
+     or NEW.is_active is distinct from OLD.is_active
+     or NEW.created_at is distinct from OLD.created_at
+     or NEW.active_session_nonce is distinct from OLD.active_session_nonce
+     or NEW.active_session_claimed_at is distinct from OLD.active_session_claimed_at then
+    raise exception 'Solo admin puede modificar campos protegidos del perfil';
+  end if;
+
+  NEW.updated_at = now();
+  return NEW;
+end;
+$$;
+
+-- Enforce profile role limits (1 admin, 1 operator, 6 barbers)
+create or replace function public.enforce_profile_role_limits()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_active_admins integer := 0;
+  v_active_operators integer := 0;
+  v_active_barbers integer := 0;
+begin
+  if tg_op = 'UPDATE'
+     and OLD.role = 'admin'
+     and coalesce(OLD.is_active, false)
+     and (NEW.role <> 'admin' or coalesce(NEW.is_active, false) = false) then
+    select count(*)
+    into v_active_admins
+    from public.profiles p
+    where p.role = 'admin'
+      and p.is_active = true
+      and p.id <> OLD.id;
+
+    if v_active_admins < 1 then
+      raise exception 'Debe existir al menos 1 admin activo.';
+    end if;
+  end if;
+
+  if coalesce(NEW.is_active, false) then
+    if NEW.role = 'admin' then
+      select count(*)
+      into v_active_admins
+      from public.profiles p
+      where p.role = 'admin'
+        and p.is_active = true
+        and (tg_op = 'INSERT' or p.id <> OLD.id);
+
+      if v_active_admins >= 1 then
+        raise exception 'Solo se permite 1 admin activo.';
+      end if;
+    elsif NEW.role = 'operator' then
+      select count(*)
+      into v_active_operators
+      from public.profiles p
+      where p.role = 'operator'
+        and p.is_active = true
+        and (tg_op = 'INSERT' or p.id <> OLD.id);
+
+      if v_active_operators >= 1 then
+        raise exception 'Solo se permite 1 operador activo.';
+      end if;
+    elsif NEW.role = 'barber' then
+      select count(*)
+      into v_active_barbers
+      from public.profiles p
+      where p.role = 'barber'
+        and p.is_active = true
+        and (tg_op = 'INSERT' or p.id <> OLD.id);
+
+      if v_active_barbers >= 6 then
+        raise exception 'El plan permite hasta 6 barberos activos.';
+      end if;
+    end if;
+  end if;
+
+  return NEW;
+end;
+$$;
+
+-- Customer rollup (aggregate stats)
+create or replace function public.refresh_customer_rollup(p_customer_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_total_spent numeric(12,2);
+  v_total_appointments integer;
+  v_last timestamptz;
+  v_next timestamptz;
+begin
+  select
+    coalesce(sum(case when a.status not in ('cancelled', 'no_show') then a.cost else 0 end), 0),
+    count(*),
+    max((a.appointment_date::date + a.appointment_time::time)::timestamptz),
+    min((a.appointment_date::date + a.appointment_time::time)::timestamptz) filter (
+      where (a.appointment_date::date + a.appointment_time::time)::timestamptz > now()
+    )
+  into v_total_spent, v_total_appointments, v_last, v_next
+  from public.appointments a
+  where a.customer_id = p_customer_id;
+
+  update public.customers c
+  set total_spent = coalesce(v_total_spent, 0),
+      total_appointments = coalesce(v_total_appointments, 0),
+      last_appointment_at = v_last,
+      next_appointment_at = v_next,
+      updated_at = now()
+  where c.id = p_customer_id;
+end;
+$$;
+
+create or replace function public.trg_refresh_customer_rollup()
+returns trigger
+language plpgsql
+as $$
+begin
+  if tg_op = 'DELETE' then
+    perform public.refresh_customer_rollup(OLD.customer_id);
+    return OLD;
+  end if;
+
+  perform public.refresh_customer_rollup(NEW.customer_id);
+  return NEW;
+end;
+$$;
+
+-- Inventory movement trigger (with safety stock enforcement)
+create or replace function public.trg_apply_inventory_movement()
+returns trigger
+language plpgsql
+as $$
+declare
+  current_stock integer;
+  current_safety_stock integer;
+  next_stock integer;
+begin
+  select stock, safety_stock
+  into current_stock, current_safety_stock
+  from public.inventory_products
+  where id = NEW.product_id
+  for update;
+
+  if not found then
+    raise exception 'No se encontro el producto del movimiento.';
+  end if;
+
+  if NEW.quantity < 0 then
+    raise exception 'La cantidad del movimiento no puede ser negativa.';
+  end if;
+
+  if NEW.type = 'in' then
+    next_stock := current_stock + NEW.quantity;
+  elsif NEW.type = 'out' then
+    next_stock := current_stock - NEW.quantity;
+  else
+    next_stock := NEW.quantity;
+  end if;
+
+  if next_stock < 0 then
+    raise exception 'El movimiento dejaria el stock en negativo.';
+  end if;
+
+  if NEW.type in ('out', 'adjustment') and next_stock < current_safety_stock then
+    raise exception 'El movimiento deja el stock en % y perfora el stock de seguridad (%).', next_stock, current_safety_stock;
+  end if;
+
+  update public.inventory_products
+  set stock = next_stock,
+      updated_at = now()
+  where id = NEW.product_id;
+
+  return NEW;
+end;
+$$;
+
+-- Flow.cl payment webhook handler
+create or replace function public.handle_flow_webhook(
+  p_flow_subscription_id text,
+  p_flow_customer_email text,
+  p_plan public.plan_name
+)
+returns void as $$
+begin
+  update public.tenants
+  set
+    flow_subscription_id = p_flow_subscription_id,
+    flow_customer_email = p_flow_customer_email,
+    plan = p_plan,
+    updated_at = now()
+  where flow_subscription_id = p_flow_subscription_id;
+end;
+$$ language plpgsql security definer;
+
+-- Cancel Flow subscription (downgrade to starter)
+create or replace function public.cancel_flow_subscription(
+  p_flow_subscription_id text
+)
+returns void as $$
+begin
+  update public.tenants
+  set
+    flow_subscription_id = null,
+    plan = 'starter',
+    updated_at = now()
+  where flow_subscription_id = p_flow_subscription_id;
+end;
+$$ language plpgsql security definer;
+
+-- Dashboard KPI function
+create or replace function public.get_dashboard_kpis(p_profile_id uuid, p_role text)
+returns table (
+  appointments_today integer,
+  appointments_week integer,
+  appointments_month integer,
+  revenue_month numeric,
+  avg_ticket numeric,
+  occupancy numeric,
+  new_customers integer,
+  recurring_customers integer
+)
+language plpgsql
+security invoker
+as $$
+declare
+  v_filter_by_barber boolean;
+  v_total_revenue numeric(12,2);
+  v_total_completed integer;
+  v_appointments_week integer;
+  v_slots numeric;
+begin
+  v_filter_by_barber := lower(p_role) = 'barber';
+
+  select
+    count(*) filter (where a.appointment_date::date = current_date),
+    count(*) filter (where a.appointment_date::date >= date_trunc('week', current_date)::date),
+    count(*) filter (where date_trunc('month', a.appointment_date::date) = date_trunc('month', current_date)),
+    coalesce(sum(a.cost) filter (
+      where date_trunc('month', a.appointment_date::date) = date_trunc('month', current_date)
+      and a.status not in ('cancelled', 'no_show')
+    ), 0),
+    count(*) filter (
+      where date_trunc('month', a.appointment_date::date) = date_trunc('month', current_date)
+      and a.status not in ('cancelled', 'no_show')
+    )
+  into appointments_today, appointments_week, appointments_month, v_total_revenue, v_total_completed
+  from public.appointments a
+  where not v_filter_by_barber or a.barber_id = p_profile_id;
+
+  revenue_month := v_total_revenue;
+  avg_ticket := case when v_total_completed > 0 then v_total_revenue / v_total_completed else 0 end;
+
+  select count(*)
+  into v_appointments_week
+  from public.appointments a
+  where a.appointment_date::date >= date_trunc('week', current_date)::date
+    and (not v_filter_by_barber or a.barber_id = p_profile_id);
+
+  v_slots := case when v_filter_by_barber then 12 * 7 else greatest(12 * 7 * (select count(*) from public.profiles where role = 'barber' and is_active), 1) end;
+  occupancy := round((v_appointments_week::numeric / greatest(v_slots, 1)) * 100, 2);
+
+  select count(*)
+  into new_customers
+  from public.customers c
+  where date_trunc('month', c.created_at) = date_trunc('month', current_date)
+    and (not v_filter_by_barber or exists (
+      select 1 from public.appointments a2
+      where a2.customer_id = c.id and a2.barber_id = p_profile_id
+    ));
+
+  select count(*)
+  into recurring_customers
+  from public.customers c
+  where c.total_appointments > 1
+    and date_trunc('month', coalesce(c.last_appointment_at, c.created_at)) = date_trunc('month', current_date)
+    and (not v_filter_by_barber or exists (
+      select 1 from public.appointments a2
+      where a2.customer_id = c.id and a2.barber_id = p_profile_id
+    ));
+
+  return next;
+end;
+$$;
+
+-- ============================================================================
+-- Triggers
+-- ============================================================================
+
+-- updated_at triggers
+drop trigger if exists trg_profiles_updated_at on public.profiles;
+create trigger trg_profiles_updated_at
+  before update on public.profiles
+  for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_customers_updated_at on public.customers;
+create trigger trg_customers_updated_at
+  before update on public.customers
+  for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_appointments_updated_at on public.appointments;
+create trigger trg_appointments_updated_at
+  before update on public.appointments
+  for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_services_updated_at on public.services;
+create trigger trg_services_updated_at
+  before update on public.services
+  for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_inventory_products_updated_at on public.inventory_products;
+create trigger trg_inventory_products_updated_at
+  before update on public.inventory_products
+  for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_tenants_updated_at on public.tenants;
+create trigger trg_tenants_updated_at
+  before update on public.tenants
+  for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_customer_technical_profiles_updated_at on public.customer_technical_profiles;
+create trigger trg_customer_technical_profiles_updated_at
+  before update on public.customer_technical_profiles
+  for each row execute function public.set_updated_at();
+
+-- Customer rollup trigger
+drop trigger if exists trg_appointments_rollup on public.appointments;
+create trigger trg_appointments_rollup
+  after insert or update or delete on public.appointments
+  for each row execute function public.trg_refresh_customer_rollup();
+
+-- Inventory movement trigger
+drop trigger if exists trg_inventory_movement_apply on public.inventory_movements;
+create trigger trg_inventory_movement_apply
+  after insert on public.inventory_movements
+  for each row execute function public.trg_apply_inventory_movement();
+
+-- Auth user auto-profile trigger
+drop trigger if exists trg_auth_user_created on auth.users;
+create trigger trg_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_new_auth_user();
+
+-- Profile sensitive update guard
+drop trigger if exists trg_profiles_guard_sensitive_updates on public.profiles;
+create trigger trg_profiles_guard_sensitive_updates
+  before update on public.profiles
+  for each row execute function public.guard_profile_sensitive_updates();
+
+-- Profile role limits
+drop trigger if exists trg_profiles_enforce_role_limits on public.profiles;
+create trigger trg_profiles_enforce_role_limits
+  before insert or update on public.profiles
+  for each row execute function public.enforce_profile_role_limits();
+
+-- ============================================================================
+-- Row-Level Security (RLS)
+-- ============================================================================
+
+alter table public.tenants enable row level security;
+alter table public.memberships enable row level security;
+alter table public.tenant_seats enable row level security;
+alter table public.tenant_products enable row level security;
+alter table public.allowed_emails enable row level security;
+alter table public.profiles enable row level security;
+alter table public.customers enable row level security;
+alter table public.appointments enable row level security;
+alter table public.services enable row level security;
+alter table public.inventory_products enable row level security;
+alter table public.inventory_movements enable row level security;
+alter table public.customer_technical_profiles enable row level security;
+
+-- tenants
+drop policy if exists "tenants_self_select" on public.tenants;
+create policy "tenants_self_select"
+  on public.tenants for select
+  using (
+    id in (
+      select tenant_id from public.memberships
+      where user_id = auth.uid()
+    )
+  );
+
+drop policy if exists "tenants_self_insert" on public.tenants;
+create policy "tenants_self_insert"
+  on public.tenants for insert
+  with check (true);
+
+drop policy if exists "tenants_self_update" on public.tenants;
+create policy "tenants_self_update"
+  on public.tenants for update
+  using (
+    id in (
+      select tenant_id from public.memberships
+      where user_id = auth.uid() and role in ('owner', 'admin')
+    )
+  );
+
+-- memberships
+drop policy if exists "memberships_self_select" on public.memberships;
+create policy "memberships_self_select"
+  on public.memberships for select
+  using (tenant_id in (
+    select tenant_id from public.memberships where user_id = auth.uid()
+  ));
+
+drop policy if exists "memberships_insert" on public.memberships;
+create policy "memberships_insert"
+  on public.memberships for insert
+  with check (
+    tenant_id in (
+      select tenant_id from public.memberships
+      where user_id = auth.uid() and role in ('owner', 'admin')
+    )
+  );
+
+drop policy if exists "memberships_delete" on public.memberships;
+create policy "memberships_delete"
+  on public.memberships for delete
+  using (
+    tenant_id in (
+      select tenant_id from public.memberships
+      where user_id = auth.uid() and role = 'owner'
+    )
+  );
+
+-- tenant_seats
+drop policy if exists "tenant_seats_self_select" on public.tenant_seats;
+create policy "tenant_seats_self_select"
+  on public.tenant_seats for select
+  using (tenant_id in (
+    select tenant_id from public.memberships where user_id = auth.uid()
+  ));
+
+drop policy if exists "tenant_seats_insert" on public.tenant_seats;
+create policy "tenant_seats_insert"
+  on public.tenant_seats for insert
+  with check (
+    tenant_id in (
+      select tenant_id from public.memberships
+      where user_id = auth.uid() and role in ('owner', 'admin')
+    )
+  );
+
+drop policy if exists "tenant_seats_delete" on public.tenant_seats;
+create policy "tenant_seats_delete"
+  on public.tenant_seats for delete
+  using (
+    tenant_id in (
+      select tenant_id from public.memberships
+      where user_id = auth.uid() and role in ('owner', 'admin')
+    )
+  );
+
+-- tenant_products
+drop policy if exists "tenant_products_self_select" on public.tenant_products;
+create policy "tenant_products_self_select"
+  on public.tenant_products for select
+  using (tenant_id in (
+    select tenant_id from public.memberships where user_id = auth.uid()
+  ));
+
+-- allowed_emails (admin only)
+drop policy if exists "allowed_emails_admin_select" on public.allowed_emails;
+create policy "allowed_emails_admin_select"
+  on public.allowed_emails
+  for select
+  using (public.is_admin(auth.uid()));
+
+drop policy if exists "allowed_emails_admin_write" on public.allowed_emails;
+create policy "allowed_emails_admin_write"
+  on public.allowed_emails
+  for all
+  using (public.is_admin(auth.uid()))
+  with check (public.is_admin(auth.uid()));
+
+-- profiles (org-scoped → tenant-scoped)
+drop policy if exists "profiles_tenant_select" on public.profiles;
+create policy "profiles_tenant_select"
+  on public.profiles for select
+  using (
+    tenant_id in (
+      select tenant_id from public.memberships where user_id = auth.uid()
+    )
+  );
+
+drop policy if exists "profiles_tenant_update" on public.profiles;
+create policy "profiles_tenant_update"
+  on public.profiles for update
+  using (
+    tenant_id in (
+      select tenant_id from public.memberships
+      where user_id = auth.uid() and role in ('owner', 'admin')
+    )
+  );
+
+drop policy if exists "profiles_self_insert" on public.profiles;
+create policy "profiles_self_insert"
+  on public.profiles for insert
+  with check (id = auth.uid());
+
+-- customers (org-scoped → tenant-scoped)
+drop policy if exists "customers_tenant_select" on public.customers;
+create policy "customers_tenant_select"
+  on public.customers for select
+  using (
+    tenant_id in (
+      select tenant_id from public.memberships where user_id = auth.uid()
+    )
+  );
+
+drop policy if exists "customers_tenant_insert" on public.customers;
+create policy "customers_tenant_insert"
+  on public.customers for insert
+  with check (
+    tenant_id in (
+      select tenant_id from public.memberships
+      where user_id = auth.uid() and role in ('owner', 'admin', 'member')
+    )
+  );
+
+drop policy if exists "customers_tenant_update" on public.customers;
+create policy "customers_tenant_update"
+  on public.customers for update
+  using (
+    tenant_id in (
+      select tenant_id from public.memberships
+      where user_id = auth.uid() and role in ('owner', 'admin', 'member')
+    )
+  );
+
+drop policy if exists "customers_tenant_delete" on public.customers;
+create policy "customers_tenant_delete"
+  on public.customers for delete
+  using (
+    tenant_id in (
+      select tenant_id from public.memberships
+      where user_id = auth.uid() and role in ('owner', 'admin')
+    )
+  );
+
+-- appointments (org-scoped → tenant-scoped)
+drop policy if exists "appointments_tenant_select" on public.appointments;
+create policy "appointments_tenant_select"
+  on public.appointments for select
+  using (
+    tenant_id in (
+      select tenant_id from public.memberships where user_id = auth.uid()
+    )
+  );
+
+drop policy if exists "appointments_tenant_insert" on public.appointments;
+create policy "appointments_tenant_insert"
+  on public.appointments for insert
+  with check (
+    tenant_id in (
+      select tenant_id from public.memberships
+      where user_id = auth.uid() and role in ('owner', 'admin')
+    )
+  );
+
+drop policy if exists "appointments_tenant_update" on public.appointments;
+create policy "appointments_tenant_update"
+  on public.appointments for update
+  using (
+    tenant_id in (
+      select tenant_id from public.memberships
+      where user_id = auth.uid() and role in ('owner', 'admin')
+    )
+  );
+
+-- services (org-scoped → tenant-scoped)
+drop policy if exists "services_tenant_select" on public.services;
+create policy "services_tenant_select"
+  on public.services for select
+  using (
+    tenant_id in (
+      select tenant_id from public.memberships where user_id = auth.uid()
+    )
+  );
+
+drop policy if exists "services_tenant_insert" on public.services;
+create policy "services_tenant_insert"
+  on public.services for insert
+  with check (
+    tenant_id in (
+      select tenant_id from public.memberships
+      where user_id = auth.uid() and role in ('owner', 'admin')
+    )
+  );
+
+drop policy if exists "services_tenant_update" on public.services;
+create policy "services_tenant_update"
+  on public.services for update
+  using (
+    tenant_id in (
+      select tenant_id from public.memberships
+      where user_id = auth.uid() and role in ('owner', 'admin')
+    )
+  );
+
+-- inventory_products (org-scoped → tenant-scoped)
+drop policy if exists "inventory_products_tenant_select" on public.inventory_products;
+create policy "inventory_products_tenant_select"
+  on public.inventory_products for select
+  using (
+    tenant_id in (
+      select tenant_id from public.memberships where user_id = auth.uid()
+    )
+  );
+
+drop policy if exists "inventory_products_tenant_insert" on public.inventory_products;
+create policy "inventory_products_tenant_insert"
+  on public.inventory_products for insert
+  with check (
+    tenant_id in (
+      select tenant_id from public.memberships
+      where user_id = auth.uid() and role in ('owner', 'admin')
+    )
+  );
+
+drop policy if exists "inventory_products_tenant_update" on public.inventory_products;
+create policy "inventory_products_tenant_update"
+  on public.inventory_products for update
+  using (
+    tenant_id in (
+      select tenant_id from public.memberships
+      where user_id = auth.uid() and role in ('owner', 'admin')
+    )
+  );
+
+-- inventory_movements (org-scoped → tenant-scoped)
+drop policy if exists "inventory_movements_tenant_select" on public.inventory_movements;
+create policy "inventory_movements_tenant_select"
+  on public.inventory_movements for select
+  using (
+    tenant_id in (
+      select tenant_id from public.memberships where user_id = auth.uid()
+    )
+  );
+
+drop policy if exists "inventory_movements_tenant_insert" on public.inventory_movements;
+create policy "inventory_movements_tenant_insert"
+  on public.inventory_movements for insert
+  with check (
+    tenant_id in (
+      select tenant_id from public.memberships
+      where user_id = auth.uid() and role in ('owner', 'admin')
+    )
+  );
+
+-- customer_technical_profiles (org-scoped via customers FK → tenant-scoped)
+drop policy if exists "customer_technical_profiles_tenant_select" on public.customer_technical_profiles;
+create policy "customer_technical_profiles_tenant_select"
+  on public.customer_technical_profiles for select
+  using (
+    exists (
+      select 1 from public.customers c
+      where c.id = customer_technical_profiles.customer_id
+        and c.tenant_id in (
+          select tenant_id from public.memberships where user_id = auth.uid()
+        )
+    )
+  );
+
+drop policy if exists "customer_technical_profiles_tenant_insert" on public.customer_technical_profiles;
+create policy "customer_technical_profiles_tenant_insert"
+  on public.customer_technical_profiles for insert
+  with check (
+    exists (
+      select 1 from public.customers c
+      where c.id = customer_technical_profiles.customer_id
+        and c.tenant_id in (
+          select tenant_id from public.memberships
+          where user_id = auth.uid() and role in ('owner', 'admin', 'member')
+        )
+    )
+  );
+
+drop policy if exists "customer_technical_profiles_tenant_update" on public.customer_technical_profiles;
+create policy "customer_technical_profiles_tenant_update"
+  on public.customer_technical_profiles for update
+  using (
+    exists (
+      select 1 from public.customers c
+      where c.id = customer_technical_profiles.customer_id
+        and c.tenant_id in (
+          select tenant_id from public.memberships
+          where user_id = auth.uid() and role in ('owner', 'admin', 'member')
+        )
+    )
+  )
+  with check (
+    exists (
+      select 1 from public.customers c
+      where c.id = customer_technical_profiles.customer_id
+        and c.tenant_id in (
+          select tenant_id from public.memberships
+          where user_id = auth.uid() and role in ('owner', 'admin', 'member')
+        )
+    )
+  );
+
+-- ============================================================================
+-- Views
+-- ============================================================================
+
+create or replace view public.vw_appointments_enriched
+with (security_invoker = true)
+as
+select
+  a.id,
+  a.customer_id,
+  a.appointment_date::date as appointment_date,
+  to_char(a.appointment_time::time, 'HH24:MI') as appointment_time,
+  c.name as customer_name,
+  c.email as customer_email,
+  c.phone as customer_phone,
+  a.external_service_id,
+  a.service_name,
+  coalesce(p.full_name, a.staff_name, 'Sin asignar') as barber_name,
+  a.barber_id,
+  a.external_staff_key,
+  a.cost,
+  a.status,
+  a.booked_at,
+  a.comments,
+  a.created_at
+from public.appointments a
+join public.customers c on c.id = a.customer_id
+left join public.profiles p on p.id = a.barber_id;
+
+create or replace view public.vw_revenue_by_barber
+with (security_invoker = true)
+as
+select
+  coalesce(p.full_name, a.staff_name, 'Sin asignar') as barber_name,
+  a.barber_id,
+  sum(a.cost) as revenue
+from public.appointments a
+left join public.profiles p on p.id = a.barber_id
+where a.status not in ('cancelled', 'no_show')
+group by coalesce(p.full_name, a.staff_name, 'Sin asignar'), a.barber_id;
+
+create or replace view public.vw_revenue_by_service
+with (security_invoker = true)
+as
+select
+  a.service_name,
+  sum(a.cost) as revenue
+from public.appointments a
+where a.status not in ('cancelled', 'no_show')
+group by a.service_name;
+
+create or replace view public.vw_appointments_per_day
+with (security_invoker = true)
+as
+select
+  to_char(a.appointment_date::date, 'YYYY-MM-DD') as day,
+  a.appointment_date::date as appointment_date,
+  count(*) as total
+from public.appointments a
+where a.appointment_date::date >= (current_date - interval '30 day')
+group by to_char(a.appointment_date::date, 'YYYY-MM-DD'), a.appointment_date::date
+order by a.appointment_date::date;
+
+-- ============================================================================
+-- Grants
+-- ============================================================================
+
+grant usage on schema public to authenticated;
+
+grant select, insert, update, delete on all tables in schema public to authenticated;
+
+grant select on public.vw_appointments_enriched to authenticated;
+grant select on public.vw_revenue_by_barber to authenticated;
+
+-- RPC grants
+grant execute on function public.is_admin(uuid) to authenticated;
+grant execute on function public.is_admin(uuid) to service_role;
+grant execute on function public.is_admin(uuid) to anon;
+
+grant execute on function public.is_operator(uuid) to authenticated;
+grant execute on function public.is_operator(uuid) to service_role;
+
+grant execute on function public.is_admin_or_operator(uuid) to authenticated;
+grant execute on function public.is_admin_or_operator(uuid) to service_role;
+
+grant execute on function public.get_current_profile() to authenticated;
+grant execute on function public.get_current_profile() to service_role;
+grant execute on function public.get_current_profile() to anon;
+
+grant execute on function public.claim_current_profile_session(uuid) to authenticated;
+grant execute on function public.claim_current_profile_session(uuid) to service_role;
+
+grant execute on function public.validate_current_profile_session(uuid) to authenticated;
+grant execute on function public.validate_current_profile_session(uuid) to service_role;
+
+grant execute on function public.release_current_profile_session(uuid) to authenticated;
+grant execute on function public.release_current_profile_session(uuid) to service_role;
+
+grant execute on function public.get_dashboard_kpis(uuid, text) to authenticated;
+
+grant execute on function public.get_current_tenant() to authenticated;
+grant execute on function public.get_current_tenant() to service_role;
+
+grant execute on function public.get_user_tenant_role(uuid) to authenticated;
+grant execute on function public.get_user_tenant_role(uuid) to service_role;
+
+grant execute on function public.is_tenant_admin(uuid) to authenticated;
+grant execute on function public.is_tenant_admin(uuid) to service_role;
+
+grant execute on function public.get_tenant_seats_count(uuid) to authenticated;
+grant execute on function public.get_tenant_seats_count(uuid) to service_role;
+
+grant execute on function public.handle_flow_webhook(text, text, public.plan_name) to service_role;
+
+grant execute on function public.cancel_flow_subscription(text) to service_role;
+
+-- ============================================================================
+-- Seed data
+-- ============================================================================
+
+-- Default tenant (idempotent)
+insert into public.tenants (slug, business_name, plan, product)
+values ('default', 'Default Tenant', 'starter', 'soly')
+on conflict (slug) do nothing;

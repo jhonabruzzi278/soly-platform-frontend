@@ -1,0 +1,41 @@
+project_id = "soly-platform"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "storage", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+major_version = 15
+
+[studio]
+enabled = true
+port = 54323
+
+[inbucket]
+enabled = true
+port = 54324
+
+[realtime]
+enabled = true
+
+[functions.create-organization]
+verify_jwt = false
+
+[functions.invite-member]
+verify_jwt = true
+
+[functions.flow-create-subscription]
+verify_jwt = true
+
+[functions.flow-cancel-subscription]
+verify_jwt = true
+
+[functions.flow-webhook]
+verify_jwt = false
+
+[functions.import-data]
+verify_jwt = true
