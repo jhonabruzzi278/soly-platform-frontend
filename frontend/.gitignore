@@ -5,3 +5,5 @@ dev-dist/
 .env.*
 !.env.example
 *.tsbuildinfo
+
+.vercel
