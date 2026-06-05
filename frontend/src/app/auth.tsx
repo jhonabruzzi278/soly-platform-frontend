@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState, type PropsWithChildren } from "react";
 import { Navigate, Outlet, useLocation } from "react-router-dom";
-import { supabase } from "../lib/supabase";
+import { supabase, supabaseUrl, supabaseAnonKey } from "../lib/supabase";
 import type { Session as SupabaseSession, User } from "@supabase/supabase-js";
 
 type SolyRole = "owner" | "admin" | "member";
@@ -97,19 +97,62 @@ export function AuthProvider({ children }: PropsWithChildren) {
     async signup({ email, password, name, businessName }) {
       setLoading(true);
       setError(null);
+      const normalizedEmail = email.trim().toLowerCase();
       const slug = businessName.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 30);
-      await supabase.auth.signUp({
-        email: email.trim().toLowerCase(), password,
+
+      // Try signup first
+      const { error: signUpErr } = await supabase.auth.signUp({
+        email: normalizedEmail, password,
         options: { data: { name, tenant_name: businessName, tenant_id: slug, plan: "starter", role: "owner" } }
       });
-      const { data, error: loginErr } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
-      if (loginErr || !data.session) {
-        const msg = translateAuthError(loginErr?.message ?? "Cuenta creada pero no se pudo iniciar sesion.");
-        setError(msg); setLoading(false);
-        throw new Error(msg);
+
+      // If user already exists (from Logify or previous signup), just log them in
+      if (signUpErr && (signUpErr.message.includes("already registered") || signUpErr.message.includes("already been"))) {
+        const { data: loginData, error: loginErr } = await supabase.auth.signInWithPassword({ email: normalizedEmail, password });
+        if (loginErr || !loginData.session) {
+          const msg = "Ya tienes cuenta con este email pero la contrasena no coincide. Inicia sesion en la pestana Login.";
+          setError(msg); setLoading(false);
+          throw new Error(msg);
+        }
+        // Check if user already has a membership (from Logify or previous Soly)
+        const { data: existingMembership } = await supabase.from("memberships").select("tenant_id").eq("user_id", loginData.session.user.id).limit(1).maybeSingle();
+        if (!existingMembership) {
+          // Create Soly tenant for existing user via edge function
+          const resp = await fetch(`${supabaseUrl}/functions/v1/create-organization`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", apikey: supabaseAnonKey },
+            body: JSON.stringify({ email: normalizedEmail, password: "existing-user-" + crypto.randomUUID(), business_name: businessName, slug, plan: "starter" })
+          });
+          if (!resp.ok) {
+            const { error: apiErr } = await resp.json();
+            if (!apiErr.includes("already been registered")) {
+              const msg = apiErr || "Error al crear tu espacio";
+              setError(msg); setLoading(false);
+              throw new Error(msg);
+            }
+          }
+        }
+        const s = buildSession(loginData.session.user, loginData.session);
+        if (!s) { const msg = "No se pudo iniciar sesion"; setError(msg); setLoading(false); throw new Error(msg); }
+        setSession(s); setLoading(false);
+        return s;
       }
-      const s = buildSession(data.session.user, data.session);
-      if (!s) { setError("No session"); setLoading(false); throw new Error("No session"); }
+
+      if (signUpErr) {
+        setError(translateAuthError(signUpErr.message));
+        setLoading(false);
+        throw new Error(translateAuthError(signUpErr.message));
+      }
+
+      // New user: sign in immediately (autoconfirm is on)
+      const { data: loginData, error: loginErr } = await supabase.auth.signInWithPassword({ email: normalizedEmail, password });
+      if (loginErr || !loginData.session) {
+        setError("Cuenta creada pero no se pudo iniciar sesion. Intenta en Login.");
+        setLoading(false);
+        return null as any;
+      }
+      const s = buildSession(loginData.session.user, loginData.session);
+      if (!s) { setError("No session"); setLoading(false); return null as any; }
       setSession(s); setLoading(false);
       return s;
     },
