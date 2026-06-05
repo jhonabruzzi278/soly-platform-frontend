@@ -29,12 +29,29 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
     try {
       const { data: row, error } = await supabase
         .from("memberships")
-        .select("*, tenants(*)")
+        .select("tenant_id, user_id, role, created_at")
         .eq("user_id", session.user.id)
         .limit(1)
         .maybeSingle();
 
+      console.log("[TenantContext] memberships query:", { row, error: error?.message });
+
       if (error || !row) {
+        setTenant(null);
+        setMembership(null);
+        setLoading(false);
+        return;
+      }
+
+      const { data: tenantData, error: tenantError } = await supabase
+        .from("tenants")
+        .select("*")
+        .eq("id", row.tenant_id)
+        .single();
+
+      console.log("[TenantContext] tenants query:", { tenantData, error: tenantError?.message });
+
+      if (tenantError || !tenantData) {
         setTenant(null);
         setMembership(null);
       } else {
@@ -43,11 +60,12 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
           user_id: row.user_id,
           role: row.role,
           created_at: row.created_at,
-          tenant: row.tenants
+          tenant: tenantData
         });
-        setTenant(row.tenants);
+        setTenant(tenantData);
       }
-    } catch {
+    } catch (err) {
+      console.error("[TenantContext] error:", err);
       setTenant(null);
       setMembership(null);
     } finally {

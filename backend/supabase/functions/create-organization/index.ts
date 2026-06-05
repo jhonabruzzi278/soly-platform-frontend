@@ -40,10 +40,7 @@ serve(async (req) => {
             .limit(1)
             .maybeSingle();
           if (members) {
-            await adminClient.auth.admin.generateLink({
-              type: "magiclink", email, options: { redirectTo: (req.headers.get("origin") ?? supabaseUrl) + "/dashboard" }
-            } as any);
-            return new Response(JSON.stringify({ tenant_id: members.tenant_id, email_sent: true }), {
+            return new Response(JSON.stringify({ tenant_id: members.tenant_id, already_exists: true }), {
               headers: { ...corsHeaders, "Content-Type": "application/json" }
             });
           }
@@ -71,8 +68,7 @@ serve(async (req) => {
         if (org2Error) throw org2Error;
         await adminClient.from("memberships").insert({ tenant_id: org2.id, user_id: userId, role: "owner" });
         await adminClient.from("tenant_seats").insert({ tenant_id: org2.id, user_id: userId, is_active: true });
-        await adminClient.auth.admin.generateLink({ type: "magiclink", email, options: { redirectTo: (req.headers.get("origin") ?? supabaseUrl) + "/dashboard" } } as any);
-        return new Response(JSON.stringify({ tenant_id: org2.id, email_sent: true }), {
+        return new Response(JSON.stringify({ tenant_id: org2.id }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" }
         });
       }
@@ -82,9 +78,7 @@ serve(async (req) => {
     await adminClient.from("memberships").insert({ tenant_id: org.id, user_id: userId, role: "owner" });
     await adminClient.from("tenant_seats").insert({ tenant_id: org.id, user_id: userId, is_active: true });
 
-    await adminClient.auth.admin.generateLink({ type: "magiclink", email, options: { redirectTo: (req.headers.get("origin") ?? supabaseUrl) + "/dashboard" } } as any);
-
-    return new Response(JSON.stringify({ tenant_id: org.id, email_sent: true }), {
+    return new Response(JSON.stringify({ tenant_id: org.id }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" }
     });
   } catch (err) {
