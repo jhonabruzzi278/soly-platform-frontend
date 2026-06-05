@@ -15,26 +15,6 @@ create extension if not exists citext;
 -- ============================================================================
 do $$
 begin
-  if not exists (select 1 from pg_type where typname = 'user_role') then
-    create type public.user_role as enum ('admin', 'barber');
-  end if;
-end $$;
-
-do $$
-begin
-  if not exists (
-    select 1
-    from pg_enum enum
-    join pg_type typ on typ.oid = enum.enumtypid
-    where typ.typname = 'user_role'
-      and enum.enumlabel = 'operator'
-  ) then
-    alter type public.user_role add value 'operator' after 'admin';
-  end if;
-end $$;
-
-do $$
-begin
   if not exists (select 1 from pg_type where typname = 'inventory_movement_type') then
     create type public.inventory_movement_type as enum ('in', 'out', 'adjustment');
   end if;
@@ -78,10 +58,8 @@ create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   email citext not null unique,
   full_name text,
-  role public.user_role not null default 'barber',
+  role text not null default 'member' check (char_length(role) > 0 and char_length(role) <= 50),
   is_active boolean not null default true,
-  active_session_nonce uuid,
-  active_session_claimed_at timestamptz,
   tenant_id uuid references public.tenants(id) on delete set null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -337,148 +315,6 @@ $$ language sql stable;
 -- Functions (business logic)
 -- ============================================================================
 
--- Get current profile (securely, bypasses RLS)
-create or replace function public.get_current_profile()
-returns table (
-  id uuid,
-  email text,
-  full_name text,
-  role public.user_role,
-  is_active boolean
-)
-language sql
-security definer
-set search_path = public
-as $$
-  select
-    p.id,
-    p.email::text,
-    p.full_name,
-    case
-      when lower(p.role::text) = 'admin' then 'admin'::public.user_role
-      when lower(p.role::text) = 'operator' then 'operator'::public.user_role
-      else 'barber'::public.user_role
-    end as role,
-    p.is_active
-  from public.profiles p
-  where p.id = auth.uid()
-  limit 1;
-$$;
-
--- Single-session controls
-create or replace function public.claim_current_profile_session(p_session_nonce uuid)
-returns table (
-  id uuid,
-  email text,
-  full_name text,
-  role public.user_role,
-  is_active boolean,
-  active_session_nonce uuid
-)
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  v_profile public.profiles%rowtype;
-begin
-  select *
-  into v_profile
-  from public.profiles
-  where public.profiles.id = auth.uid()
-  limit 1;
-
-  if not found then
-    return;
-  end if;
-
-  if coalesce(v_profile.is_active, false) then
-    update public.profiles
-    set active_session_nonce = p_session_nonce,
-        active_session_claimed_at = now(),
-        updated_at = now()
-    where public.profiles.id = v_profile.id
-    returning * into v_profile;
-  end if;
-
-  return query
-  select
-    v_profile.id,
-    v_profile.email::text,
-    v_profile.full_name,
-    case
-      when lower(v_profile.role::text) = 'admin' then 'admin'::public.user_role
-      when lower(v_profile.role::text) = 'operator' then 'operator'::public.user_role
-      else 'barber'::public.user_role
-    end as role,
-    coalesce(v_profile.is_active, false) as is_active,
-    v_profile.active_session_nonce;
-end;
-$$;
-
-create or replace function public.validate_current_profile_session(p_session_nonce uuid)
-returns table (
-  id uuid,
-  email text,
-  full_name text,
-  role public.user_role,
-  is_active boolean,
-  active_session_nonce uuid,
-  session_valid boolean
-)
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  v_profile public.profiles%rowtype;
-begin
-  select *
-  into v_profile
-  from public.profiles
-  where public.profiles.id = auth.uid()
-  limit 1;
-
-  if not found then
-    return;
-  end if;
-
-  return query
-  select
-    v_profile.id,
-    v_profile.email::text,
-    v_profile.full_name,
-    case
-      when lower(v_profile.role::text) = 'admin' then 'admin'::public.user_role
-      when lower(v_profile.role::text) = 'operator' then 'operator'::public.user_role
-      else 'barber'::public.user_role
-    end as role,
-    coalesce(v_profile.is_active, false) as is_active,
-    v_profile.active_session_nonce,
-    (
-      coalesce(v_profile.is_active, false)
-      and v_profile.active_session_nonce is not null
-      and v_profile.active_session_nonce = p_session_nonce
-    ) as session_valid;
-end;
-$$;
-
-create or replace function public.release_current_profile_session(p_session_nonce uuid)
-returns void
-language plpgsql
-security definer
-set search_path = public
-as $$
-begin
-  update public.profiles
-  set active_session_nonce = null,
-      active_session_claimed_at = null,
-      updated_at = now()
-  where public.profiles.id = auth.uid()
-    and active_session_nonce = p_session_nonce;
-end;
-$$;
-
 -- Handle new auth user: auto-create profile row
 create or replace function public.handle_new_auth_user()
 returns trigger
@@ -528,7 +364,7 @@ begin
     new.id,
     new.email,
     coalesce(new.raw_user_meta_data ->> 'full_name', new.email),
-    'barber',
+    'member',
     allowed
   )
   on conflict (id) do update
@@ -537,113 +373,6 @@ begin
         updated_at = now();
 
   return new;
-end;
-$$;
-
--- Guard sensitive profile field updates (non-admin users cannot elevate)
-create or replace function public.guard_profile_sensitive_updates()
-returns trigger
-language plpgsql
-security definer
-set search_path = public
-as $$
-begin
-  if current_user in ('postgres', 'service_role', 'supabase_admin')
-     or coalesce(auth.role(), '') = 'service_role' then
-    NEW.updated_at = now();
-    return NEW;
-  end if;
-
-  if public.is_admin(auth.uid()) then
-    NEW.updated_at = now();
-    return NEW;
-  end if;
-
-  if auth.uid() is null or OLD.id <> auth.uid() then
-    raise exception 'No autorizado para actualizar este perfil';
-  end if;
-
-  if NEW.id is distinct from OLD.id
-     or NEW.email is distinct from OLD.email
-     or NEW.role is distinct from OLD.role
-     or NEW.is_active is distinct from OLD.is_active
-     or NEW.created_at is distinct from OLD.created_at
-     or NEW.active_session_nonce is distinct from OLD.active_session_nonce
-     or NEW.active_session_claimed_at is distinct from OLD.active_session_claimed_at then
-    raise exception 'Solo admin puede modificar campos protegidos del perfil';
-  end if;
-
-  NEW.updated_at = now();
-  return NEW;
-end;
-$$;
-
--- Enforce profile role limits (1 admin, 1 operator, 6 barbers)
-create or replace function public.enforce_profile_role_limits()
-returns trigger
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  v_active_admins integer := 0;
-  v_active_operators integer := 0;
-  v_active_barbers integer := 0;
-begin
-  if tg_op = 'UPDATE'
-     and OLD.role = 'admin'
-     and coalesce(OLD.is_active, false)
-     and (NEW.role <> 'admin' or coalesce(NEW.is_active, false) = false) then
-    select count(*)
-    into v_active_admins
-    from public.profiles p
-    where p.role = 'admin'
-      and p.is_active = true
-      and p.id <> OLD.id;
-
-    if v_active_admins < 1 then
-      raise exception 'Debe existir al menos 1 admin activo.';
-    end if;
-  end if;
-
-  if coalesce(NEW.is_active, false) then
-    if NEW.role = 'admin' then
-      select count(*)
-      into v_active_admins
-      from public.profiles p
-      where p.role = 'admin'
-        and p.is_active = true
-        and (tg_op = 'INSERT' or p.id <> OLD.id);
-
-      if v_active_admins >= 1 then
-        raise exception 'Solo se permite 1 admin activo.';
-      end if;
-    elsif NEW.role = 'operator' then
-      select count(*)
-      into v_active_operators
-      from public.profiles p
-      where p.role = 'operator'
-        and p.is_active = true
-        and (tg_op = 'INSERT' or p.id <> OLD.id);
-
-      if v_active_operators >= 1 then
-        raise exception 'Solo se permite 1 operador activo.';
-      end if;
-    elsif NEW.role = 'barber' then
-      select count(*)
-      into v_active_barbers
-      from public.profiles p
-      where p.role = 'barber'
-        and p.is_active = true
-        and (tg_op = 'INSERT' or p.id <> OLD.id);
-
-      if v_active_barbers >= 6 then
-        raise exception 'El plan permite hasta 6 barberos activos.';
-      end if;
-    end if;
-  end if;
-
-  return NEW;
 end;
 $$;
 
@@ -905,18 +634,6 @@ drop trigger if exists trg_auth_user_created on auth.users;
 create trigger trg_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_auth_user();
-
--- Profile sensitive update guard
-drop trigger if exists trg_profiles_guard_sensitive_updates on public.profiles;
-create trigger trg_profiles_guard_sensitive_updates
-  before update on public.profiles
-  for each row execute function public.guard_profile_sensitive_updates();
-
--- Profile role limits
-drop trigger if exists trg_profiles_enforce_role_limits on public.profiles;
-create trigger trg_profiles_enforce_role_limits
-  before insert or update on public.profiles
-  for each row execute function public.enforce_profile_role_limits();
 
 -- ============================================================================
 -- Row-Level Security (RLS)
@@ -1295,19 +1012,6 @@ grant execute on function public.is_operator(uuid) to service_role;
 
 grant execute on function public.is_admin_or_operator(uuid) to authenticated;
 grant execute on function public.is_admin_or_operator(uuid) to service_role;
-
-grant execute on function public.get_current_profile() to authenticated;
-grant execute on function public.get_current_profile() to service_role;
-grant execute on function public.get_current_profile() to anon;
-
-grant execute on function public.claim_current_profile_session(uuid) to authenticated;
-grant execute on function public.claim_current_profile_session(uuid) to service_role;
-
-grant execute on function public.validate_current_profile_session(uuid) to authenticated;
-grant execute on function public.validate_current_profile_session(uuid) to service_role;
-
-grant execute on function public.release_current_profile_session(uuid) to authenticated;
-grant execute on function public.release_current_profile_session(uuid) to service_role;
 
 grant execute on function public.get_dashboard_kpis(uuid, text) to authenticated;
 
