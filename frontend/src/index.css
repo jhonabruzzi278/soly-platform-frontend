@@ -114,6 +114,39 @@ textarea {
   border-color: var(--border);
 }
 
+.card-hover {
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+.card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: -9px -9px 18px var(--neu-shadow-light), 9px 9px 18px var(--neu-shadow-dark);
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-in {
+  animation: fadeInUp 320ms ease forwards;
+}
+
+.animate-in:nth-child(1) { animation-delay: 0ms; }
+.animate-in:nth-child(2) { animation-delay: 50ms; }
+.animate-in:nth-child(3) { animation-delay: 100ms; }
+.animate-in:nth-child(4) { animation-delay: 150ms; }
+.animate-in:nth-child(5) { animation-delay: 200ms; }
+.animate-in:nth-child(6) { animation-delay: 250ms; }
+.animate-in:nth-child(7) { animation-delay: 300ms; }
+.animate-in:nth-child(8) { animation-delay: 350ms; }
+
 .theme-shell {
   background: var(--background);
   color: var(--foreground);
@@ -327,4 +360,27 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb {
 
 ::-webkit-scrollbar-track {
   background: transparent;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

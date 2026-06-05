@@ -82,12 +82,12 @@ export const DashboardPage = () => {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <KpiCard
+        <div className="animate-in"><KpiCard
           label="Citas hoy"
           value={String(k.appointments_today)}
           helper="Total de citas del dia"
           icon={<MaterialIcon name="today" size={20} />}
-        />
+        /></div>
         <KpiCard
           label="Citas esta semana"
           value={String(k.appointments_week)}

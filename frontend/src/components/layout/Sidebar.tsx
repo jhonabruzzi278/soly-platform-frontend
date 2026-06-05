@@ -58,6 +58,7 @@ export const Sidebar = ({ role, tenant }: SidebarProps) => {
                     "grid h-10 w-10 place-items-center rounded-lg bg-[var(--primary)] text-sm font-semibold text-[var(--primary-foreground)]",
                     !open && "h-9 w-9"
                   )}
+                  aria-hidden="true"
                 >
                   {initials || "EH"}
                 </div>
@@ -113,10 +114,10 @@ export const Sidebar = ({ role, tenant }: SidebarProps) => {
               <SidebarMenu>
                 {secondaryLinks.map((link) => (
                   <SidebarMenuItem key={link.to}>
-                    <NavLink to={link.to} onClick={() => setOpenMobile(false)}>
+                    <NavLink to={link.to} onClick={() => setOpenMobile(false)} aria-label={link.label}>
                       {({ isActive }) => (
                         <SidebarMenuButton isActive={isActive} className={cn(!open && "justify-center px-0")}>
-                          <MaterialIcon name={link.icon} size={18} filled={isActive} />
+                          <MaterialIcon name={link.icon} size={18} filled={isActive} aria-hidden="true" />
                           {open ? <span className="truncate">{link.label}</span> : <span className="sr-only">{link.label}</span>}
                         </SidebarMenuButton>
                       )}
