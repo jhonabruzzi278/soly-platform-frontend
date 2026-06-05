@@ -28,28 +28,20 @@ serve(async (req) => {
       user_metadata: { full_name: business_name }
     });
 
+    let userId: string;
+
     if (createError) {
       if (createError.message.includes("already been registered")) {
         const { data: existing } = await adminClient.auth.admin.listUsers();
         const found = existing?.users?.find((u: { email?: string }) => u.email?.toLowerCase() === email.toLowerCase());
-        if (found) {
-          const { data: members } = await adminClient
-            .from("memberships")
-            .select("tenant_id")
-            .eq("user_id", found.id)
-            .limit(1)
-            .maybeSingle();
-          if (members) {
-            return new Response(JSON.stringify({ tenant_id: members.tenant_id, already_exists: true }), {
-              headers: { ...corsHeaders, "Content-Type": "application/json" }
-            });
-          }
-        }
+        if (!found) throw new Error("Usuario no encontrado");
+        userId = found.id;
+      } else {
+        throw createError;
       }
-      throw createError;
+    } else {
+      userId = created.user!.id;
     }
-
-    const userId = created.user!.id;
 
     const { data: org, error: orgError } = await adminClient
       .from("tenants")
@@ -66,8 +58,8 @@ serve(async (req) => {
           .select()
           .single();
         if (org2Error) throw org2Error;
-        await adminClient.from("memberships").insert({ tenant_id: org2.id, user_id: userId, role: "owner" });
-        await adminClient.from("tenant_seats").insert({ tenant_id: org2.id, user_id: userId, is_active: true });
+        await adminClient.from("memberships").insert({ tenant_id: org2.id, user_id: userId, role: "owner" }).onConflict("user_id,tenant_id").ignore();
+        await adminClient.from("tenant_seats").insert({ tenant_id: org2.id, user_id: userId, is_active: true }).onConflict("user_id,tenant_id").ignore();
         return new Response(JSON.stringify({ tenant_id: org2.id }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" }
         });
@@ -75,8 +67,8 @@ serve(async (req) => {
       throw orgError;
     }
 
-    await adminClient.from("memberships").insert({ tenant_id: org.id, user_id: userId, role: "owner" });
-    await adminClient.from("tenant_seats").insert({ tenant_id: org.id, user_id: userId, is_active: true });
+    await adminClient.from("memberships").insert({ tenant_id: org.id, user_id: userId, role: "owner" }).onConflict("user_id,tenant_id").ignore();
+    await adminClient.from("tenant_seats").insert({ tenant_id: org.id, user_id: userId, is_active: true }).onConflict("user_id,tenant_id").ignore();
 
     return new Response(JSON.stringify({ tenant_id: org.id }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" }
