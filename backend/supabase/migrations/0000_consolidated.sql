@@ -160,9 +160,7 @@ create table if not exists public.appointments (
   state text,
   country text,
   postal_code text,
-  external_staff_key text,
   staff_name text,
-  external_service_id text,
   tenant_id uuid references public.tenants(id) on delete set null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -207,20 +205,6 @@ create table if not exists public.inventory_movements (
   created_at timestamptz not null default now()
 );
 
--- Customer Technical Profiles
-create table if not exists public.customer_technical_profiles (
-  id uuid primary key default gen_random_uuid(),
-  customer_id uuid not null unique references public.customers(id) on delete cascade,
-  preferred_cut_style text,
-  hair_type text,
-  scalp_condition text,
-  allergies text,
-  color_formula text,
-  extra_notes text,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-
 -- ============================================================================
 -- Indexes
 -- ============================================================================
@@ -233,14 +217,26 @@ create index if not exists idx_appointments_customer on public.appointments (cus
 create index if not exists idx_appointments_barber on public.appointments (barber_id);
 create index if not exists idx_appointments_date on public.appointments (appointment_date);
 create index if not exists idx_appointments_status on public.appointments (status);
-create index if not exists idx_appointments_external_staff_key on public.appointments (external_staff_key);
-create index if not exists idx_appointments_external_service_id on public.appointments (external_service_id);
+create index if not exists idx_appointments_tenant on public.appointments (tenant_id);
+
+create index if not exists idx_services_tenant on public.services (tenant_id);
+
+create index if not exists idx_inventory_products_tenant on public.inventory_products (tenant_id);
 
 create index if not exists idx_inventory_movements_product on public.inventory_movements (product_id);
+create index if not exists idx_inventory_movements_tenant on public.inventory_movements (tenant_id);
 
-create index if not exists idx_profiles_active_session_nonce on public.profiles (active_session_nonce);
+create index if not exists idx_customers_tenant on public.customers (tenant_id);
 
-create index if not exists idx_customer_technical_profiles_customer on public.customer_technical_profiles(customer_id);
+create index if not exists idx_memberships_user on public.memberships (user_id);
+create index if not exists idx_memberships_tenant on public.memberships (tenant_id);
+
+create index if not exists idx_tenant_seats_user on public.tenant_seats (user_id);
+
+create index if not exists idx_profiles_tenant on public.profiles (tenant_id);
+
+create index if not exists idx_tenants_slug on public.tenants (slug);
+
 
 -- ============================================================================
 -- Functions (helpers)
@@ -892,11 +888,6 @@ create trigger trg_tenants_updated_at
   before update on public.tenants
   for each row execute function public.set_updated_at();
 
-drop trigger if exists trg_customer_technical_profiles_updated_at on public.customer_technical_profiles;
-create trigger trg_customer_technical_profiles_updated_at
-  before update on public.customer_technical_profiles
-  for each row execute function public.set_updated_at();
-
 -- Customer rollup trigger
 drop trigger if exists trg_appointments_rollup on public.appointments;
 create trigger trg_appointments_rollup
@@ -942,7 +933,6 @@ alter table public.appointments enable row level security;
 alter table public.services enable row level security;
 alter table public.inventory_products enable row level security;
 alter table public.inventory_movements enable row level security;
-alter table public.customer_technical_profiles enable row level security;
 
 -- tenants
 drop policy if exists "tenants_self_select" on public.tenants;
@@ -1223,58 +1213,6 @@ create policy "inventory_movements_tenant_insert"
     )
   );
 
--- customer_technical_profiles (org-scoped via customers FK → tenant-scoped)
-drop policy if exists "customer_technical_profiles_tenant_select" on public.customer_technical_profiles;
-create policy "customer_technical_profiles_tenant_select"
-  on public.customer_technical_profiles for select
-  using (
-    exists (
-      select 1 from public.customers c
-      where c.id = customer_technical_profiles.customer_id
-        and c.tenant_id in (
-          select tenant_id from public.memberships where user_id = auth.uid()
-        )
-    )
-  );
-
-drop policy if exists "customer_technical_profiles_tenant_insert" on public.customer_technical_profiles;
-create policy "customer_technical_profiles_tenant_insert"
-  on public.customer_technical_profiles for insert
-  with check (
-    exists (
-      select 1 from public.customers c
-      where c.id = customer_technical_profiles.customer_id
-        and c.tenant_id in (
-          select tenant_id from public.memberships
-          where user_id = auth.uid() and role in ('owner', 'admin', 'member')
-        )
-    )
-  );
-
-drop policy if exists "customer_technical_profiles_tenant_update" on public.customer_technical_profiles;
-create policy "customer_technical_profiles_tenant_update"
-  on public.customer_technical_profiles for update
-  using (
-    exists (
-      select 1 from public.customers c
-      where c.id = customer_technical_profiles.customer_id
-        and c.tenant_id in (
-          select tenant_id from public.memberships
-          where user_id = auth.uid() and role in ('owner', 'admin', 'member')
-        )
-    )
-  )
-  with check (
-    exists (
-      select 1 from public.customers c
-      where c.id = customer_technical_profiles.customer_id
-        and c.tenant_id in (
-          select tenant_id from public.memberships
-          where user_id = auth.uid() and role in ('owner', 'admin', 'member')
-        )
-    )
-  );
-
 -- ============================================================================
 -- Views
 -- ============================================================================
@@ -1290,11 +1228,9 @@ select
   c.name as customer_name,
   c.email as customer_email,
   c.phone as customer_phone,
-  a.external_service_id,
   a.service_name,
   coalesce(p.full_name, a.staff_name, 'Sin asignar') as barber_name,
   a.barber_id,
-  a.external_staff_key,
   a.cost,
   a.status,
   a.booked_at,
