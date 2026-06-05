@@ -19,7 +19,7 @@ language sql stable security definer
 set search_path = public
 as $$
   select tenant_id from memberships
-  where user_id = auth.uid() and role = any(p_roles);
+  where user_id = auth.uid() and role::text = any(p_roles);
 $$;
 
 grant execute on function public.get_my_tenant_ids_for_role(text[]) to authenticated;
