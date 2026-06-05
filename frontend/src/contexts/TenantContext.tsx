@@ -1,7 +1,7 @@
 import { createContext, ReactNode, useContext, useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { Tenant, Membership } from "../lib/types";
-import { useAuth } from "../hooks/useAuth";
+import { useAuth } from "../app/auth";
 
 type TenantContextValue = {
   tenant: Tenant | null;
@@ -19,7 +19,7 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   const fetchTenant = async () => {
-    if (!session?.user) {
+    if (!session?.userId) {
       setTenant(null);
       setMembership(null);
       setLoading(false);
@@ -30,42 +30,29 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
       const { data: row, error } = await supabase
         .from("memberships")
         .select("tenant_id, user_id, role, created_at")
-        .eq("user_id", session.user.id)
+        .eq("user_id", session.userId)
         .limit(1)
         .maybeSingle();
-
-      console.log("[TenantContext] memberships query:", { row, error: error?.message });
 
       if (error || !row) {
         setTenant(null);
         setMembership(null);
-        setLoading(false);
-        return;
-      }
-
-      const { data: tenantData, error: tenantError } = await supabase
-        .from("tenants")
-        .select("*")
-        .eq("id", row.tenant_id)
-        .single();
-
-      console.log("[TenantContext] tenants query:", { tenantData, error: tenantError?.message });
-
-      if (tenantError || !tenantData) {
-        setTenant(null);
-        setMembership(null);
       } else {
-        setMembership({
-          tenant_id: row.tenant_id,
-          user_id: row.user_id,
-          role: row.role,
-          created_at: row.created_at,
-          tenant: tenantData
-        });
-        setTenant(tenantData);
+        const { data: tenantData, error: tenantError } = await supabase
+          .from("tenants")
+          .select("*")
+          .eq("id", row.tenant_id)
+          .single();
+
+        if (tenantError || !tenantData) {
+          setTenant(null);
+          setMembership(null);
+        } else {
+          setMembership({ tenant_id: row.tenant_id, user_id: row.user_id, role: row.role, created_at: row.created_at, tenant: tenantData });
+          setTenant(tenantData);
+        }
       }
-    } catch (err) {
-      console.error("[TenantContext] error:", err);
+    } catch {
       setTenant(null);
       setMembership(null);
     } finally {
@@ -74,14 +61,10 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
   };
 
   useEffect(() => {
-    if (!authLoading) {
-      void fetchTenant();
-    }
-  }, [authLoading, session?.user?.id]);
+    if (!authLoading) { void fetchTenant(); }
+  }, [authLoading, session?.userId]);
 
-  const refetch = async () => {
-    await fetchTenant();
-  };
+  const refetch = async () => { await fetchTenant(); };
 
   return (
     <TenantContext.Provider value={{ tenant, membership, loading, refetch }}>
