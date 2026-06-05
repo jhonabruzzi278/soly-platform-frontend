@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Soly — Gestión inteligente para tu negocio</title>
+  <meta name="description" content="Soly es el CRM SaaS para negocios de servicios. Gestiona clientes, citas, inventario y reportes desde un solo lugar.">
+  <meta name="robots" content="index, follow">
+  <link rel="icon" type="image/jpeg" href="/1.jpg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #e7e5e4;
+      --fg: #1e2938;
+      --primary: #006666;
+      --primary-fg: #f5fbfb;
+      --muted: #5a6472;
+      --card: #e7e5e4;
+      --border: #dedcd9;
+      --shadow-light: rgba(255,255,255,0.9);
+      --shadow-dark: rgba(163,177,198,0.6);
+      --shadow: -7px -7px 14px var(--shadow-light), 7px 7px 14px var(--shadow-dark);
+      --shadow-pressed: inset 5px 5px 10px rgba(163,177,198,0.55), inset -5px -5px 10px rgba(255,255,255,0.9);
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: "Space Mono", monospace;
+      background: var(--bg);
+      color: var(--fg);
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: var(--primary); }
+    .container { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+
+    header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 20px 0; border-bottom: 1px solid var(--border);
+    }
+    header h1 { font-size: 1.4rem; font-weight: 700; letter-spacing: -0.02em; color: var(--primary); }
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 12px 24px; border-radius: 12px; font-family: inherit;
+      font-size: 0.9rem; font-weight: 600; text-decoration: none; cursor: pointer;
+      border: none; transition: all 160ms ease;
+    }
+    .btn-primary { background: var(--primary); color: var(--primary-fg); box-shadow: var(--shadow); }
+    .btn-primary:hover { transform: translateY(-2px); }
+    .btn-outline { background: var(--bg); color: var(--primary); box-shadow: var(--shadow); }
+    .btn-outline:hover { box-shadow: var(--shadow-pressed); }
+
+    .hero {
+      text-align: center; padding: 100px 0 80px;
+    }
+    .hero .badge {
+      display: inline-block; padding: 6px 16px; border-radius: 99px;
+      background: var(--bg); box-shadow: var(--shadow-pressed);
+      font-size: 0.7rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.22em; color: var(--muted); margin-bottom: 24px;
+    }
+    .hero h2 { font-size: 3.2rem; font-weight: 700; line-height: 1.15; letter-spacing: -0.03em; margin-bottom: 20px; }
+    .hero h2 span { color: var(--primary); }
+    .hero p { font-size: 1.05rem; color: var(--muted); max-width: 580px; margin: 0 auto 36px; line-height: 1.7; }
+    .hero .actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; padding: 80px 0; }
+    .card {
+      background: var(--card); border-radius: 20px; padding: 32px 28px;
+      box-shadow: var(--shadow); transition: transform 160ms ease;
+    }
+    .card:hover { transform: translateY(-3px); }
+    .card .icon {
+      width: 48px; height: 48px; border-radius: 14px; display: flex;
+      align-items: center; justify-content: center; font-size: 1.4rem;
+      margin-bottom: 20px; box-shadow: var(--shadow-pressed);
+    }
+    .card h3 { font-size: 1.1rem; font-weight: 700; margin-bottom: 8px; }
+    .card p { font-size: 0.85rem; color: var(--muted); line-height: 1.6; }
+
+    .pricing {
+      text-align: center; padding: 80px 0;
+    }
+    .pricing h2 { font-size: 2rem; margin-bottom: 12px; }
+    .pricing > p { color: var(--muted); margin-bottom: 48px; }
+    .pricing-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; max-width: 800px; margin: 0 auto; }
+    .plan {
+      background: var(--card); border-radius: 20px; padding: 36px 28px;
+      box-shadow: var(--shadow); text-align: left;
+    }
+    .plan.featured { border: 2px solid var(--primary); }
+    .plan h3 { font-size: 1.2rem; margin-bottom: 4px; }
+    .plan .price { font-size: 2.4rem; font-weight: 700; margin: 12px 0 4px; }
+    .plan .period { font-size: 0.8rem; color: var(--muted); margin-bottom: 20px; }
+    .plan ul { list-style: none; margin-bottom: 24px; }
+    .plan li { font-size: 0.85rem; padding: 6px 0; color: var(--muted); }
+    .plan li::before { content: "✓ "; color: var(--primary); font-weight: 700; }
+
+    .cta { text-align: center; padding: 80px 0; }
+    .cta h2 { font-size: 2rem; margin-bottom: 16px; }
+    .cta p { color: var(--muted); margin-bottom: 32px; }
+
+    footer {
+      text-align: center; padding: 40px 0; border-top: 1px solid var(--border);
+      font-size: 0.8rem; color: var(--muted);
+    }
+    footer a { color: var(--muted); text-decoration: underline; }
+
+    @media (max-width: 640px) {
+      .hero h2 { font-size: 2rem; }
+      .hero { padding: 60px 0 40px; }
+      .cards, .pricing { padding: 40px 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Soly</h1>
+      <a href="https://app.soly.cl/login" class="btn btn-outline">Iniciar sesión</a>
+    </header>
+
+    <section class="hero">
+      <div class="badge">CRM para negocios de servicios</div>
+      <h2>Gestiona tu negocio <span>sin esfuerzo</span></h2>
+      <p>Soly centraliza clientes, citas, servicios y reportes en un solo lugar. Diseñado para barberías, salones, spas y negocios de servicios.</p>
+      <div class="actions">
+        <a href="https://app.soly.cl/onboarding" class="btn btn-primary">Comenzar gratis</a>
+        <a href="#pricing" class="btn btn-outline">Ver planes</a>
+      </div>
+    </section>
+
+    <section class="cards">
+      <div class="card">
+        <div class="icon">👥</div>
+        <h3>Clientes</h3>
+        <p>Registra todos tus clientes con historial de citas, gasto total y datos de contacto. Importa desde Excel o CSV.</p>
+      </div>
+      <div class="card">
+        <div class="icon">📅</div>
+        <h3>Citas</h3>
+        <p>Agenda, confirma y da seguimiento a cada cita. Controla el estado en tiempo real: pendiente, confirmada, completada.</p>
+      </div>
+      <div class="card">
+        <div class="icon">📊</div>
+        <h3>Reportes</h3>
+        <p>Dashboard con KPIs en tiempo real: revenue, ocupación, ticket promedio, clientes nuevos y recurrentes.</p>
+      </div>
+      <div class="card">
+        <div class="icon">📁</div>
+        <h3>Importa tus datos</h3>
+        <p>Sube archivos Excel o CSV con tus clientes, citas o servicios. El sistema los procesa automáticamente.</p>
+      </div>
+      <div class="card">
+        <div class="icon">🔒</div>
+        <h3>Multi-tenant seguro</h3>
+        <p>Cada negocio tiene sus datos completamente aislados. Tu información nunca se mezcla con la de otros.</p>
+      </div>
+      <div class="card">
+        <div class="icon">🌐</div>
+        <h3>Acceso desde cualquier lugar</h3>
+        <p>Plataforma web. Funciona en desktop, tablet y móvil. Instalable como PWA para acceso rápido.</p>
+      </div>
+    </section>
+
+    <section class="pricing" id="pricing">
+      <h2>Planes simples, sin sorpresas</h2>
+      <p>Elige el plan que se ajusta a tu negocio</p>
+      <div class="pricing-grid">
+        <div class="plan">
+          <h3>Starter</h3>
+          <div class="price">$0</div>
+          <div class="period">Para siempre gratis</div>
+          <ul>
+            <li>1 usuario</li>
+            <li>100 archivos</li>
+            <li>Dashboard básico</li>
+            <li>Importación de datos</li>
+          </ul>
+          <a href="https://app.soly.cl/onboarding" class="btn btn-outline" style="width:100%;justify-content:center">Comenzar</a>
+        </div>
+        <div class="plan featured">
+          <h3>Business</h3>
+          <div class="price">$49</div>
+          <div class="period">/mes · Pago vía Flow.cl</div>
+          <ul>
+            <li>20 usuarios</li>
+            <li>10,000 archivos</li>
+            <li>Dashboard completo + KPIs</li>
+            <li>Clientes, Citas, Reportes</li>
+            <li>Importación avanzada</li>
+          </ul>
+          <a href="https://app.soly.cl/onboarding" class="btn btn-primary" style="width:100%;justify-content:center">Probar gratis</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="cta">
+      <h2>¿Listo para organizar tu negocio?</h2>
+      <p>Empieza hoy, sin tarjeta de crédito.</p>
+      <a href="https://app.soly.cl/onboarding" class="btn btn-primary">Crear mi cuenta gratis</a>
+    </section>
+
+    <footer>
+      <p>Soly · CRM inteligente para negocios de servicios</p>
+      <p style="margin-top:8px"><a href="https://app.soly.cl/login">Iniciar sesión</a> · <a href="https://app.soly.cl/recuperar-password">Recuperar contraseña</a></p>
+    </footer>
+  </div>
+</body>
+</html>
