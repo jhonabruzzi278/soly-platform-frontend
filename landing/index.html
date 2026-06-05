@@ -4,208 +4,295 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Soly — Gestión inteligente para tu negocio</title>
-  <meta name="description" content="Soly es el CRM SaaS para negocios de servicios. Gestiona clientes, citas, inventario y reportes desde un solo lugar.">
+  <meta name="description" content="Soly es el CRM SaaS para negocios de servicios. Inspirado en Solymus, hijo de Zeus.">
   <meta name="robots" content="index, follow">
-  <link rel="icon" type="image/jpeg" href="/1.jpg">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>☀️</text></svg>">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #e7e5e4;
-      --fg: #1e2938;
-      --primary: #006666;
-      --primary-fg: #f5fbfb;
-      --muted: #5a6472;
-      --card: #e7e5e4;
-      --border: #dedcd9;
-      --shadow-light: rgba(255,255,255,0.9);
-      --shadow-dark: rgba(163,177,198,0.6);
-      --shadow: -7px -7px 14px var(--shadow-light), 7px 7px 14px var(--shadow-dark);
-      --shadow-pressed: inset 5px 5px 10px rgba(163,177,198,0.55), inset -5px -5px 10px rgba(255,255,255,0.9);
+      --marble: #faf8f5;
+      --marble-dark: #f0ece6;
+      --aegean: #1a3c4a;
+      --aegean-light: #2a5568;
+      --terracotta: #c4734f;
+      --terracotta-light: #e8a87c;
+      --gold: #b8943e;
+      --gold-light: #d4b96a;
+      --olive: #5a6b46;
+      --text: #2c2420;
+      --text-muted: #7a7268;
+      --stone: #d4cdc4;
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      font-family: "Space Mono", monospace;
-      background: var(--bg);
-      color: var(--fg);
+      font-family: "Inter", system-ui, sans-serif;
+      background: var(--marble);
+      color: var(--text);
       min-height: 100vh;
       -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
     }
-    a { color: var(--primary); }
-    .container { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+    h1, h2, h3, .serif {
+      font-family: "Cormorant Garamond", Georgia, serif;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+    a { text-decoration: none; }
 
-    header {
+    /* ── Meander Pattern ── */
+    .meander {
+      height: 24px;
+      background: var(--marble-dark);
+      position: relative;
+      overflow: hidden;
+    }
+    .meander::after {
+      content: "";
+      position: absolute; inset: 0;
+      background:
+        repeating-linear-gradient(90deg, var(--aegean) 0 2px, transparent 2px 24px),
+        repeating-linear-gradient(90deg, var(--aegean) 0 12px, transparent 12px 24px);
+      background-size: 24px 24px;
+      opacity: 0.12;
+    }
+
+    /* ── Container ── */
+    .wrap { max-width: 960px; margin: 0 auto; padding: 0 32px; }
+
+    /* ── Top Bar ── */
+    .topbar {
       display: flex; align-items: center; justify-content: space-between;
-      padding: 20px 0; border-bottom: 1px solid var(--border);
+      padding: 24px 0;
     }
-    header h1 { font-size: 1.4rem; font-weight: 700; letter-spacing: -0.02em; color: var(--primary); }
+    .logo {
+      display: flex; align-items: center; gap: 12px;
+    }
+    .logo-mark {
+      width: 44px; height: 44px; border-radius: 50%;
+      background: var(--aegean); color: var(--marble);
+      display: flex; align-items: center; justify-content: center;
+      font-family: "Cormorant Garamond", serif;
+      font-size: 1.5rem; font-weight: 700;
+      box-shadow: 0 2px 12px rgba(26,60,74,0.2);
+    }
+    .logo-text { font-size: 1.3rem; font-weight: 600; letter-spacing: 0.04em; color: var(--aegean); }
+
     .btn {
-      display: inline-flex; align-items: center; gap: 8px;
-      padding: 12px 24px; border-radius: 12px; font-family: inherit;
-      font-size: 0.9rem; font-weight: 600; text-decoration: none; cursor: pointer;
-      border: none; transition: all 160ms ease;
+      display: inline-flex; align-items: center; gap: 10px;
+      padding: 12px 28px; border: 1.5px solid var(--aegean);
+      font-family: "Inter", sans-serif; font-size: 0.85rem;
+      font-weight: 500; letter-spacing: 0.03em; cursor: pointer;
+      transition: all 200ms ease; border-radius: 6px;
     }
-    .btn-primary { background: var(--primary); color: var(--primary-fg); box-shadow: var(--shadow); }
-    .btn-primary:hover { transform: translateY(-2px); }
-    .btn-outline { background: var(--bg); color: var(--primary); box-shadow: var(--shadow); }
-    .btn-outline:hover { box-shadow: var(--shadow-pressed); }
+    .btn-ghost {
+      background: transparent; color: var(--aegean);
+    }
+    .btn-ghost:hover { background: var(--aegean); color: var(--marble); }
+    .btn-filled {
+      background: var(--aegean); color: var(--marble); border-color: var(--aegean);
+    }
+    .btn-filled:hover { background: var(--aegean-light); }
+    .btn-gold {
+      background: var(--gold); color: #fff; border-color: var(--gold);
+      font-weight: 500; letter-spacing: 0.05em;
+    }
+    .btn-gold:hover { background: var(--gold-light); border-color: var(--gold-light); }
 
+    /* ── Hero ── */
     .hero {
-      text-align: center; padding: 100px 0 80px;
+      text-align: center; padding: 80px 0 60px; position: relative;
     }
-    .hero .badge {
-      display: inline-block; padding: 6px 16px; border-radius: 99px;
-      background: var(--bg); box-shadow: var(--shadow-pressed);
-      font-size: 0.7rem; font-weight: 700; text-transform: uppercase;
-      letter-spacing: 0.22em; color: var(--muted); margin-bottom: 24px;
+    .hero-symbol {
+      display: inline-block; margin-bottom: 32px;
     }
-    .hero h2 { font-size: 3.2rem; font-weight: 700; line-height: 1.15; letter-spacing: -0.03em; margin-bottom: 20px; }
-    .hero h2 span { color: var(--primary); }
-    .hero p { font-size: 1.05rem; color: var(--muted); max-width: 580px; margin: 0 auto 36px; line-height: 1.7; }
-    .hero .actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+    .hero-symbol svg { width: 64px; height: 64px; }
+    .hero h1 {
+      font-size: clamp(2.8rem, 6vw, 4.8rem);
+      font-weight: 700; line-height: 1.08; margin-bottom: 20px;
+      color: var(--aegean); font-style: italic;
+    }
+    .hero h1 span { font-style: normal; color: var(--terracotta); }
+    .hero .subtitle {
+      font-size: 1.15rem; color: var(--text-muted); max-width: 500px;
+      margin: 0 auto 40px; line-height: 1.7; font-weight: 300;
+    }
+    .hero .actions { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+    .hero .ornament {
+      display: flex; align-items: center; justify-content: center; gap: 12px;
+      margin-top: 48px; color: var(--stone);
+    }
+    .hero .ornament span { font-size: 0.7rem; letter-spacing: 0.2em; text-transform: uppercase; }
 
-    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; padding: 80px 0; }
-    .card {
-      background: var(--card); border-radius: 20px; padding: 32px 28px;
-      box-shadow: var(--shadow); transition: transform 160ms ease;
-    }
-    .card:hover { transform: translateY(-3px); }
-    .card .icon {
-      width: 48px; height: 48px; border-radius: 14px; display: flex;
-      align-items: center; justify-content: center; font-size: 1.4rem;
-      margin-bottom: 20px; box-shadow: var(--shadow-pressed);
-    }
-    .card h3 { font-size: 1.1rem; font-weight: 700; margin-bottom: 8px; }
-    .card p { font-size: 0.85rem; color: var(--muted); line-height: 1.6; }
-
-    .pricing {
+    /* ── Quote ── */
+    .quote {
       text-align: center; padding: 80px 0;
+      border-top: 1px solid var(--stone);
+      border-bottom: 1px solid var(--stone);
     }
-    .pricing h2 { font-size: 2rem; margin-bottom: 12px; }
-    .pricing > p { color: var(--muted); margin-bottom: 48px; }
-    .pricing-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; max-width: 800px; margin: 0 auto; }
-    .plan {
-      background: var(--card); border-radius: 20px; padding: 36px 28px;
-      box-shadow: var(--shadow); text-align: left;
+    .quote blockquote {
+      font-family: "Cormorant Garamond", serif;
+      font-size: clamp(1.6rem, 3vw, 2.2rem);
+      font-style: italic; font-weight: 400;
+      max-width: 640px; margin: 0 auto 16px;
+      color: var(--aegean); line-height: 1.4;
     }
-    .plan.featured { border: 2px solid var(--primary); }
-    .plan h3 { font-size: 1.2rem; margin-bottom: 4px; }
-    .plan .price { font-size: 2.4rem; font-weight: 700; margin: 12px 0 4px; }
-    .plan .period { font-size: 0.8rem; color: var(--muted); margin-bottom: 20px; }
-    .plan ul { list-style: none; margin-bottom: 24px; }
-    .plan li { font-size: 0.85rem; padding: 6px 0; color: var(--muted); }
-    .plan li::before { content: "✓ "; color: var(--primary); font-weight: 700; }
-
-    .cta { text-align: center; padding: 80px 0; }
-    .cta h2 { font-size: 2rem; margin-bottom: 16px; }
-    .cta p { color: var(--muted); margin-bottom: 32px; }
-
-    footer {
-      text-align: center; padding: 40px 0; border-top: 1px solid var(--border);
-      font-size: 0.8rem; color: var(--muted);
+    .quote cite {
+      font-family: "Inter", sans-serif; font-size: 0.85rem;
+      font-style: normal; color: var(--text-muted); letter-spacing: 0.05em;
     }
-    footer a { color: var(--muted); text-decoration: underline; }
 
+    /* ── Features ── */
+    .features {
+      padding: 80px 0; display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 48px 40px;
+    }
+    .feature { text-align: center; }
+    .feature .icon {
+      width: 56px; height: 56px; margin: 0 auto 20px;
+      border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      font-size: 1.5rem; border: 1px solid var(--stone);
+      background: var(--marble);
+    }
+    .feature h3 {
+      font-size: 1.15rem; font-weight: 600; margin-bottom: 8px;
+      color: var(--aegean);
+    }
+    .feature p {
+      font-size: 0.9rem; color: var(--text-muted); line-height: 1.6;
+      font-weight: 300;
+    }
+
+    /* ── Footer ── */
+    .footer {
+      text-align: center; padding: 48px 0; border-top: 1px solid var(--stone);
+    }
+    .footer p { font-size: 0.8rem; color: var(--text-muted); }
+    .footer .greek { font-family: "Cormorant Garamond", serif; font-style: italic; font-size: 1rem; color: var(--terracotta); margin-bottom: 12px; }
+
+    /* ── Responsive ── */
     @media (max-width: 640px) {
-      .hero h2 { font-size: 2rem; }
-      .hero { padding: 60px 0 40px; }
-      .cards, .pricing { padding: 40px 0; }
+      .hero { padding: 48px 0 40px; }
+      .hero h1 { font-size: 2.4rem; }
+      .hero .subtitle { font-size: 1rem; }
+      .features { gap: 36px 24px; padding: 48px 0; }
+      .wrap { padding: 0 20px; }
     }
+
+    /* ── Animation ── */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .anim { animation: fadeUp 600ms ease forwards; opacity: 0; }
+    .anim:nth-child(1) { animation-delay: 100ms; }
+    .anim:nth-child(2) { animation-delay: 250ms; }
+    .anim:nth-child(3) { animation-delay: 400ms; }
+    .anim:nth-child(4) { animation-delay: 550ms; }
   </style>
 </head>
 <body>
-  <div class="container">
-    <header>
-      <h1>Soly</h1>
-      <a href="https://app.soly.cl/login" class="btn btn-outline">Iniciar sesión</a>
-    </header>
 
-    <section class="hero">
-      <div class="badge">CRM para negocios de servicios</div>
-      <h2>Gestiona tu negocio <span>sin esfuerzo</span></h2>
-      <p>Soly centraliza clientes, citas, servicios y reportes en un solo lugar. Diseñado para barberías, salones, spas y negocios de servicios.</p>
-      <div class="actions">
-        <a href="https://app.soly.cl/onboarding" class="btn btn-primary">Comenzar gratis</a>
-        <a href="#pricing" class="btn btn-outline">Ver planes</a>
-      </div>
-    </section>
+<div class="meander"></div>
 
-    <section class="cards">
-      <div class="card">
-        <div class="icon">👥</div>
-        <h3>Clientes</h3>
-        <p>Registra todos tus clientes con historial de citas, gasto total y datos de contacto. Importa desde Excel o CSV.</p>
-      </div>
-      <div class="card">
-        <div class="icon">📅</div>
-        <h3>Citas</h3>
-        <p>Agenda, confirma y da seguimiento a cada cita. Controla el estado en tiempo real: pendiente, confirmada, completada.</p>
-      </div>
-      <div class="card">
-        <div class="icon">📊</div>
-        <h3>Reportes</h3>
-        <p>Dashboard con KPIs en tiempo real: revenue, ocupación, ticket promedio, clientes nuevos y recurrentes.</p>
-      </div>
-      <div class="card">
-        <div class="icon">📁</div>
-        <h3>Importa tus datos</h3>
-        <p>Sube archivos Excel o CSV con tus clientes, citas o servicios. El sistema los procesa automáticamente.</p>
-      </div>
-      <div class="card">
-        <div class="icon">🔒</div>
-        <h3>Multi-tenant seguro</h3>
-        <p>Cada negocio tiene sus datos completamente aislados. Tu información nunca se mezcla con la de otros.</p>
-      </div>
-      <div class="card">
-        <div class="icon">🌐</div>
-        <h3>Acceso desde cualquier lugar</h3>
-        <p>Plataforma web. Funciona en desktop, tablet y móvil. Instalable como PWA para acceso rápido.</p>
-      </div>
-    </section>
+<main class="wrap">
 
-    <section class="pricing" id="pricing">
-      <h2>Planes simples, sin sorpresas</h2>
-      <p>Elige el plan que se ajusta a tu negocio</p>
-      <div class="pricing-grid">
-        <div class="plan">
-          <h3>Starter</h3>
-          <div class="price">$0</div>
-          <div class="period">Para siempre gratis</div>
-          <ul>
-            <li>1 usuario</li>
-            <li>100 archivos</li>
-            <li>Dashboard básico</li>
-            <li>Importación de datos</li>
-          </ul>
-          <a href="https://app.soly.cl/onboarding" class="btn btn-outline" style="width:100%;justify-content:center">Comenzar</a>
-        </div>
-        <div class="plan featured">
-          <h3>Business</h3>
-          <div class="price">$49</div>
-          <div class="period">/mes · Pago vía Flow.cl</div>
-          <ul>
-            <li>20 usuarios</li>
-            <li>10,000 archivos</li>
-            <li>Dashboard completo + KPIs</li>
-            <li>Clientes, Citas, Reportes</li>
-            <li>Importación avanzada</li>
-          </ul>
-          <a href="https://app.soly.cl/onboarding" class="btn btn-primary" style="width:100%;justify-content:center">Probar gratis</a>
-        </div>
-      </div>
-    </section>
+  <!-- Header -->
+  <header class="topbar">
+    <div class="logo">
+      <div class="logo-mark">Σ</div>
+      <span class="logo-text">Soly</span>
+    </div>
+    <a href="https://app.soly.cl/login" class="btn btn-ghost">Acceso Clientes →</a>
+  </header>
 
-    <section class="cta">
-      <h2>¿Listo para organizar tu negocio?</h2>
-      <p>Empieza hoy, sin tarjeta de crédito.</p>
-      <a href="https://app.soly.cl/onboarding" class="btn btn-primary">Crear mi cuenta gratis</a>
-    </section>
+  <!-- Hero -->
+  <section class="hero">
+    <div class="hero-symbol anim">
+      <svg viewBox="0 0 64 64" fill="none">
+        <!-- Laurel wreath -->
+        <path d="M32 12 C26 8 18 10 14 18 C10 26 14 38 22 42 C20 38 20 32 24 28 C28 24 30 22 32 20" stroke="#c4734f" stroke-width="1.5" fill="none"/>
+        <path d="M32 12 C38 8 46 10 50 18 C54 26 50 38 42 42 C44 38 44 32 40 28 C36 24 34 22 32 20" stroke="#c4734f" stroke-width="1.5" fill="none"/>
+        <path d="M28 46 C22 44 16 46 12 48" stroke="#1a3c4a" stroke-width="1" fill="none"/>
+        <path d="M36 46 C42 44 48 46 52 48" stroke="#1a3c4a" stroke-width="1" fill="none"/>
+        <!-- Pillar base -->
+        <rect x="26" y="48" width="4" height="10" rx="1" fill="#b8943e"/>
+        <rect x="34" y="48" width="4" height="10" rx="1" fill="#b8943e"/>
+        <rect x="24" y="56" width="16" height="2" rx="1" fill="#b8943e"/>
+      </svg>
+    </div>
+    <h1 class="anim">Orden en el <span>caos</span></h1>
+    <p class="subtitle anim">
+      Como Solymus trajo estructura al Olimpo,<br>
+      Soly trae orden a tu negocio.
+    </p>
+    <div class="actions anim">
+      <a href="https://app.soly.cl/onboarding" class="btn btn-filled">Comenzar ahora</a>
+      <a href="https://app.soly.cl/login" class="btn btn-gold">Acceso Clientes</a>
+    </div>
+    <div class="ornament">
+      <span>─────</span> ☀️ <span>─────</span>
+    </div>
+  </section>
 
-    <footer>
-      <p>Soly · CRM inteligente para negocios de servicios</p>
-      <p style="margin-top:8px"><a href="https://app.soly.cl/login">Iniciar sesión</a> · <a href="https://app.soly.cl/recuperar-password">Recuperar contraseña</a></p>
-    </footer>
-  </div>
+  <!-- Quote -->
+  <section class="quote">
+    <blockquote>
+      &ldquo;La excelencia no es un acto, sino un hábito.&rdquo;
+    </blockquote>
+    <cite>— Aristóteles</cite>
+  </section>
+
+  <!-- Features -->
+  <section class="features">
+    <div class="feature">
+      <div class="icon">🏛️</div>
+      <h3>Gestión Centralizada</h3>
+      <p>Clientes, citas, servicios y reportes en una sola plataforma. Sin hojas sueltas ni cuadernos desordenados.</p>
+    </div>
+    <div class="feature">
+      <div class="icon">📜</div>
+      <h3>Historial Completo</h3>
+      <p>Cada cliente tiene su registro: visitas, gasto total, preferencias. Toda la información a un clic.</p>
+    </div>
+    <div class="feature">
+      <div class="icon">⚡</div>
+      <h3>Rápido y Simple</h3>
+      <p>Importa tus datos desde Excel en segundos. Dashboard con métricas en tiempo real.</p>
+    </div>
+    <div class="feature">
+      <div class="icon">🏺</div>
+      <h3>Diseño con Propósito</h3>
+      <p>Inspirado en la proporción áurea y la claridad clásica. Una experiencia que se siente natural.</p>
+    </div>
+    <div class="feature">
+      <div class="icon">🛡️</div>
+      <h3>Seguridad Total</h3>
+      <p>Tus datos aislados y protegidos. Infraestructura enterprise con cifrado de extremo a extremo.</p>
+    </div>
+    <div class="feature">
+      <div class="icon">🌿</div>
+      <h3>Crece Contigo</h3>
+      <p>Desde un barbero solitario hasta una cadena de salones. Soly escala con tu negocio.</p>
+    </div>
+  </section>
+
+</main>
+
+<!-- Footer -->
+<footer class="footer">
+  <p class="greek">Σολυμυς · Solymus · Hijo de Zeus</p>
+  <p>Soly &copy; 2026 · CRM inteligente para negocios de servicios</p>
+  <p style="margin-top:8px">
+    <a href="https://app.soly.cl/login" style="color:var(--aegean);text-decoration:underline">Acceso Clientes</a>
+     · 
+    <a href="https://app.soly.cl/onboarding" style="color:var(--aegean);text-decoration:underline">Crear cuenta</a>
+  </p>
+</footer>
+
+<div class="meander"></div>
+
 </body>
 </html>
