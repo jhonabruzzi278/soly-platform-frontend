@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
-import { createClient } from "@supabase/supabase-js";
+import { createClient } from "npm:@supabase/supabase-js";
 import { corsHeaders } from "../_shared/cors.ts";
 import { getFlowCredentials } from "../_flow/api.ts";
 
