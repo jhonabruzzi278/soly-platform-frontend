@@ -16,18 +16,67 @@ serve(async (req) => {
 
     if (!email || !password || !business_name || !slug) {
       return new Response(
-        JSON.stringify({ error: "Faltan campos requeridos" }),
+        JSON.stringify({ error: "Faltan campos requeridos: email, password, business_name, slug" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Create auth user
     const { data: created, error: createError } = await adminClient.auth.admin.createUser({
       email,
       password,
       email_confirm: true,
       user_metadata: { full_name: business_name }
     });
+
+    if (createError) {
+      if (createError.message.includes("already been registered")) {
+        const { data: existing } = await adminClient.auth.admin.listUsers();
+        const found = existing?.users?.find((u: { email?: string }) => u.email?.toLowerCase() === email.toLowerCase());
+        if (found) {
+          const { data: members } = await adminClient
+            .from("memberships")
+            .select("tenant_id")
+            .eq("user_id", found.id)
+            .limit(1)
+            .maybeSingle();
+          if (members) {
+            await adminClient.auth.admin.generateLink({
+              type: "magiclink", email, options: { redirectTo: (req.headers.get("origin") ?? supabaseUrl) + "/dashboard" }
+            } as any);
+            return new Response(JSON.stringify({ tenant_id: members.tenant_id, email_sent: true }), {
+              headers: { ...corsHeaders, "Content-Type": "application/json" }
+            });
+          }
+        }
+      }
+      throw createError;
+    }
+
+    const userId = created.user!.id;
+
+    const { data: org, error: orgError } = await adminClient
+      .from("tenants")
+      .insert({ slug, business_name, plan })
+      .select()
+      .single();
+
+    if (orgError) throw orgError;
+
+    await adminClient.from("memberships").insert({ tenant_id: org.id, user_id: userId, role: "owner" });
+    await adminClient.from("tenant_seats").insert({ tenant_id: org.id, user_id: userId, is_active: true });
+
+    await adminClient.auth.admin.generateLink({ type: "magiclink", email, options: { redirectTo: (req.headers.get("origin") ?? supabaseUrl) + "/dashboard" } } as any);
+
+    return new Response(JSON.stringify({ tenant_id: org.id, email_sent: true }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
+    });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: err.message }), {
+      status: 400,
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
+    });
+  }
+});
 
     if (createError) throw createError;
     if (!created.user) throw new Error("No se pudo crear el usuario");

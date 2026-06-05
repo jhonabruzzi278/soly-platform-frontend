@@ -1,6 +1,5 @@
 import { FormEvent, useState } from "react";
 import { Link } from "react-router-dom";
-import { supabase } from "../../lib/supabase";
 import { createTenant } from "../../lib/api";
 import { FormInput } from "../../components/common/FormInput";
 import { MaterialIcon } from "../../components/common/MaterialIcon";
@@ -30,8 +29,6 @@ export const OnboardingPage = () => {
     try {
       const password = crypto.randomUUID() + crypto.randomUUID();
       await createTenant({ email: email.trim().toLowerCase(), password, business_name: businessName.trim(), slug: slug || businessName.trim().toLowerCase().replace(/\s+/g, "-"), plan: "starter" });
-      const { error: linkError } = await supabase.auth.signInWithOtp({ email: email.trim().toLowerCase(), options: { emailRedirectTo: window.location.origin + "/dashboard" } });
-      if (linkError) throw linkError;
       setSent(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo crear la cuenta.");
