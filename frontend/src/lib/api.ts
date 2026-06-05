@@ -88,12 +88,18 @@ export const updateTenant = async (tenantId: string, payload: Partial<Tenant>) =
 export const fetchTenantMembers = async (tenantId: string): Promise<Membership[]> => {
   const { data, error } = await supabase
     .from("memberships")
-    .select("*, tenant:tenants(*)")
+    .select("*, tenants(*)")
     .eq("tenant_id", tenantId)
     .order("created_at", { ascending: true });
 
   if (error) throw error;
-  return (data ?? []) as Membership[];
+  return (data ?? []).map((row: any) => ({
+    tenant_id: row.tenant_id,
+    user_id: row.user_id,
+    role: row.role,
+    created_at: row.created_at,
+    tenant: row.tenants
+  })) as Membership[];
 };
 
 export const inviteMember = async (tenantId: string, payload: InviteMemberPayload) => {

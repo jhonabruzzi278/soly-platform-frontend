@@ -60,7 +60,24 @@ serve(async (req) => {
       .select()
       .single();
 
-    if (orgError) throw orgError;
+    if (orgError) {
+      if (orgError.message.includes("tenants_slug_key")) {
+        const altSlug = slug + "-" + userId.slice(0, 8);
+        const { data: org2, error: org2Error } = await adminClient
+          .from("tenants")
+          .insert({ slug: altSlug, business_name, plan })
+          .select()
+          .single();
+        if (org2Error) throw org2Error;
+        await adminClient.from("memberships").insert({ tenant_id: org2.id, user_id: userId, role: "owner" });
+        await adminClient.from("tenant_seats").insert({ tenant_id: org2.id, user_id: userId, is_active: true });
+        await adminClient.auth.admin.generateLink({ type: "magiclink", email, options: { redirectTo: (req.headers.get("origin") ?? supabaseUrl) + "/dashboard" } } as any);
+        return new Response(JSON.stringify({ tenant_id: org2.id, email_sent: true }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+      throw orgError;
+    }
 
     await adminClient.from("memberships").insert({ tenant_id: org.id, user_id: userId, role: "owner" });
     await adminClient.from("tenant_seats").insert({ tenant_id: org.id, user_id: userId, is_active: true });

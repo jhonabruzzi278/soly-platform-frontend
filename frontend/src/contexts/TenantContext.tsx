@@ -29,7 +29,7 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
     try {
       const { data: row, error } = await supabase
         .from("memberships")
-        .select("*, tenant:tenants(*)")
+        .select("*, tenants(*)")
         .eq("user_id", session.user.id)
         .limit(1)
         .maybeSingle();
@@ -43,9 +43,9 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
           user_id: row.user_id,
           role: row.role,
           created_at: row.created_at,
-          tenant: row.tenant
+          tenant: row.tenants
         });
-        setTenant(row.tenant);
+        setTenant(row.tenants);
       }
     } catch {
       setTenant(null);
