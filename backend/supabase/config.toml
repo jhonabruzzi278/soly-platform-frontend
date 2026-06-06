@@ -21,21 +21,3 @@ port = 54324
 
 [realtime]
 enabled = true
-
-[functions.create-organization]
-verify_jwt = false
-
-[functions.invite-member]
-verify_jwt = true
-
-[functions.flow-create-subscription]
-verify_jwt = true
-
-[functions.flow-cancel-subscription]
-verify_jwt = true
-
-[functions.flow-webhook]
-verify_jwt = false
-
-[functions.import-data]
-verify_jwt = true
