@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Soly — Gestión inteligente para tu negocio</title>
+  <meta name="description" content="Soly es el CRM SaaS para negocios de servicios. Inspirado en Solymus, hijo de Zeus.">
+  <meta name="robots" content="index, follow">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>☀️</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --marble: #faf8f5; --marble-dark: #f0ece6; --aegean: #1a3c4a; --aegean-light: #2a5568;
+      --terracotta: #c4734f; --gold: #b8943e; --gold-light: #d4b96a;
+      --text: #2c2420; --text-muted: #7a7268; --stone: #d4cdc4;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: "Inter", system-ui, sans-serif; background: var(--marble); color: var(--text); min-height: 100vh; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+    h1, h2, h3, .serif { font-family: "Cormorant Garamond", Georgia, serif; font-weight: 600; letter-spacing: -0.01em; }
+    a { text-decoration: none; }
+    .meander { height: 24px; background: var(--marble-dark); position: relative; overflow: hidden; }
+    .meander::after { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(90deg, var(--aegean) 0 2px, transparent 2px 24px); opacity: 0.12; }
+    .wrap { max-width: 960px; margin: 0 auto; padding: 0 32px; }
+    .topbar { display: flex; align-items: center; justify-content: space-between; padding: 24px 0; }
+    .logo { display: flex; align-items: center; gap: 12px; }
+    .logo-mark { width: 44px; height: 44px; border-radius: 50%; background: var(--aegean); color: var(--marble); display: flex; align-items: center; justify-content: center; font-family: "Cormorant Garamond", serif; font-size: 1.5rem; font-weight: 700; }
+    .logo-text { font-size: 1.3rem; font-weight: 600; letter-spacing: 0.04em; color: var(--aegean); }
+    .btn { display: inline-flex; align-items: center; gap: 10px; padding: 12px 28px; border: 1.5px solid var(--aegean); font-family: "Inter", sans-serif; font-size: 0.85rem; font-weight: 500; cursor: pointer; transition: all 200ms ease; border-radius: 6px; }
+    .btn-ghost { background: transparent; color: var(--aegean); } .btn-ghost:hover { background: var(--aegean); color: var(--marble); }
+    .btn-filled { background: var(--aegean); color: var(--marble); } .btn-filled:hover { background: var(--aegean-light); }
+    .btn-gold { background: var(--gold); color: #fff; border-color: var(--gold); } .btn-gold:hover { background: var(--gold-light); }
+    .hero { text-align: center; padding: 80px 0 60px; }
+    .hero h1 { font-size: clamp(2.8rem, 6vw, 4.8rem); font-weight: 700; line-height: 1.08; margin-bottom: 20px; color: var(--aegean); font-style: italic; }
+    .hero h1 span { font-style: normal; color: var(--terracotta); }
+    .hero .subtitle { font-size: 1.15rem; color: var(--text-muted); max-width: 500px; margin: 0 auto 40px; line-height: 1.7; font-weight: 300; }
+    .hero .actions { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+    .hero .ornament { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 48px; color: var(--stone); font-size: 0.7rem; letter-spacing: 0.2em; text-transform: uppercase; }
+    .quote { text-align: center; padding: 80px 0; border-top: 1px solid var(--stone); border-bottom: 1px solid var(--stone); }
+    .quote blockquote { font-family: "Cormorant Garamond", serif; font-size: clamp(1.6rem, 3vw, 2.2rem); font-style: italic; font-weight: 400; max-width: 640px; margin: 0 auto 16px; color: var(--aegean); line-height: 1.4; }
+    .quote cite { font-family: "Inter", sans-serif; font-size: 0.85rem; font-style: normal; color: var(--text-muted); }
+    .features { padding: 80px 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 48px 40px; }
+    .feature { text-align: center; } .feature .icon { width: 56px; height: 56px; margin: 0 auto 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; border: 1px solid var(--stone); background: var(--marble); }
+    .feature h3 { font-size: 1.15rem; font-weight: 600; margin-bottom: 8px; color: var(--aegean); }
+    .feature p { font-size: 0.9rem; color: var(--text-muted); line-height: 1.6; font-weight: 300; }
+    .footer { text-align: center; padding: 48px 0; border-top: 1px solid var(--stone); }
+    .footer p { font-size: 0.8rem; color: var(--text-muted); }
+    .footer .greek { font-family: "Cormorant Garamond", serif; font-style: italic; font-size: 1rem; color: var(--terracotta); margin-bottom: 12px; }
+    @media (max-width: 640px) { .hero { padding: 48px 0 40px; } .hero h1 { font-size: 2.4rem; } .wrap { padding: 0 20px; } }
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+    .anim { animation: fadeUp 600ms ease forwards; opacity: 0; }
+    .anim:nth-child(1) { animation-delay: 100ms; } .anim:nth-child(2) { animation-delay: 250ms; } .anim:nth-child(3) { animation-delay: 400ms; }
+  </style>
+</head>
+<body>
+<div class="meander"></div>
+<main class="wrap">
+  <header class="topbar">
+    <div class="logo"><div class="logo-mark">Σ</div><span class="logo-text">Soly</span></div>
+    <a href="https://app.soly.cl/login" class="btn btn-ghost">Acceso Clientes →</a>
+  </header>
+  <section class="hero">
+    <h1 class="anim">Orden en el <span>caos</span></h1>
+    <p class="subtitle anim">Como Solymus trajo estructura al Olimpo, Soly trae orden a tu negocio.</p>
+    <div class="actions anim">
+      <a href="https://app.soly.cl/onboarding" class="btn btn-filled">Comenzar ahora</a>
+      <a href="https://app.soly.cl/login" class="btn btn-gold">Acceso Clientes</a>
+    </div>
+    <div class="ornament">───── ☀️ ─────</div>
+  </section>
+  <section class="quote">
+    <blockquote>&ldquo;La excelencia no es un acto, sino un hábito.&rdquo;</blockquote>
+    <cite>— Aristóteles</cite>
+  </section>
+  <section class="features">
+    <div class="feature"><div class="icon">🏛️</div><h3>Gestión Centralizada</h3><p>Clientes, citas, servicios y reportes en una sola plataforma.</p></div>
+    <div class="feature"><div class="icon">📜</div><h3>Historial Completo</h3><p>Cada cliente tiene su registro: visitas, gasto total, preferencias.</p></div>
+    <div class="feature"><div class="icon">⚡</div><h3>Rápido y Simple</h3><p>Importa tus datos desde Excel en segundos. Dashboard con métricas en tiempo real.</p></div>
+    <div class="feature"><div class="icon">🏺</div><h3>Diseño con Propósito</h3><p>Inspirado en la proporción áurea y la claridad clásica.</p></div>
+    <div class="feature"><div class="icon">🛡️</div><h3>Seguridad Total</h3><p>Tus datos aislados y protegidos con cifrado de extremo a extremo.</p></div>
+    <div class="feature"><div class="icon">🌿</div><h3>Crece Contigo</h3><p>Desde un barbero solitario hasta una cadena de salones. Soly escala.</p></div>
+  </section>
+</main>
+<footer class="footer">
+  <p class="greek">Σολυμυς · Solymus · Hijo de Zeus</p>
+  <p>Soly &copy; 2026 · CRM inteligente para negocios de servicios</p>
+  <p style="margin-top:8px"><a href="https://app.soly.cl/login" style="color:var(--aegean);text-decoration:underline">Acceso Clientes</a> · <a href="https://app.soly.cl/onboarding" style="color:var(--aegean);text-decoration:underline">Crear cuenta</a></p>
+</footer>
+<div class="meander"></div>
+</body>
+</html>
