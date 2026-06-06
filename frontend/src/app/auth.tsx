@@ -147,7 +147,22 @@ export function useAuth() {
 export function RequireAuth() {
   const { session, loading } = useAuth();
   const location = useLocation();
-  if (loading) return <div className="theme-shell grid min-h-screen place-items-center">Cargando...</div>;
+  const [hasSub, setHasSub] = useState<boolean | null>(null);
+
+  const exemptPaths = ["/login", "/billing", "/configuracion", "/recuperar-password"];
+
+  useEffect(() => {
+    if (!session?.userId) return;
+    if (exemptPaths.some(p => location.pathname.startsWith(p))) {
+      setHasSub(true);
+      return;
+    }
+    supabase.rpc("has_active_subscription", { p_user_id: session.userId, p_product: "soly" })
+      .then(({ data }) => setHasSub(!!data));
+  }, [session?.userId, location.pathname]);
+
+  if (loading || hasSub === null) return <div className="theme-shell grid min-h-screen place-items-center">Cargando...</div>;
   if (!session) return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  if (!hasSub && !exemptPaths.some(p => location.pathname.startsWith(p))) return <Navigate to="/billing" replace />;
   return <Outlet />;
 }

@@ -44,11 +44,10 @@ export const BillingPage = () => {
   }, [searchParams]);
 
   const handleUpgrade = async (planKey: string) => {
-    if (!session?.userId) return;
     setLoading(planKey);
     setMessage(null);
     try {
-      const { url } = await createFlowSubscription(session.userId, planKey);
+      const { url } = await createFlowSubscription(planKey);
       window.location.href = url;
     } catch (err) {
       setMessage({ tone: "danger", title: "Error", description: err instanceof Error ? err.message : "No se pudo iniciar el pago." });

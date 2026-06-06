@@ -135,10 +135,10 @@ export const countTenantSeats = async (tenantId: string): Promise<number> => {
 // Flow.cl Billing (subscriptions)
 // =========================
 
-export const createFlowSubscription = async (userId: string, plan: string) => {
+export const createFlowSubscription = async (plan: string) => {
   const data = await invokeEdgeFunction<Record<string, unknown>, { url: string }>(
     "flow-create-subscription",
-    { user_id: userId, plan, product: "soly" }
+    { plan }
   );
   return data;
 };

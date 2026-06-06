@@ -4,11 +4,19 @@ import { corsHeaders } from "../_shared/cors.ts";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
+  }
+
+  const apikey = req.headers.get("apikey");
+  if (!apikey || apikey !== supabaseAnonKey) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" }
+    });
   }
 
   try {
@@ -60,6 +68,8 @@ serve(async (req) => {
         if (org2Error) throw org2Error;
         await adminClient.from("memberships").insert({ tenant_id: org2.id, user_id: userId, role: "owner" }).onConflict("user_id,tenant_id").ignore();
         await adminClient.from("tenant_seats").insert({ tenant_id: org2.id, user_id: userId, is_active: true }).onConflict("user_id,tenant_id").ignore();
+        const trialEnds2 = new Date(); trialEnds2.setDate(trialEnds2.getDate() + 14);
+        await adminClient.from("subscriptions").upsert({ user_id: userId, product: "soly", plan: plan || "starter", status: "trialing", trial_ends_at: trialEnds2.toISOString() }, { onConflict: "user_id,product" });
         return new Response(JSON.stringify({ tenant_id: org2.id }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" }
         });
@@ -69,6 +79,14 @@ serve(async (req) => {
 
     await adminClient.from("memberships").insert({ tenant_id: org.id, user_id: userId, role: "owner" }).onConflict("user_id,tenant_id").ignore();
     await adminClient.from("tenant_seats").insert({ tenant_id: org.id, user_id: userId, is_active: true }).onConflict("user_id,tenant_id").ignore();
+
+    // Crear trial de 14 dias
+    const trialEnds = new Date();
+    trialEnds.setDate(trialEnds.getDate() + 14);
+    await adminClient.from("subscriptions").upsert({
+      user_id: userId, product: "soly", plan: plan || "starter",
+      status: "trialing", trial_ends_at: trialEnds.toISOString()
+    }, { onConflict: "user_id,product" });
 
     return new Response(JSON.stringify({ tenant_id: org.id }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" }

@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js";
 import { corsHeaders } from "../_shared/cors.ts";
+import { getFlowCredentials, flowApiCall } from "../_flow/api.ts";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -23,41 +24,45 @@ serve(async (req) => {
 
   try {
     const params = await req.json().catch(() => ({}));
-    const providerSubscriptionId = params.subscriptionId ?? params.flowSubscriptionId ?? "";
+    const token = params.token ?? params.flowToken ?? "";
     const customerEmail = params.customerEmail ?? params.payerEmail ?? "";
     const planId = params.planId ?? params.subscriptionPlanId ?? "";
-    const status = String(params.status ?? "1");
 
-    if (!providerSubscriptionId) {
-      return new Response(JSON.stringify({ error: "Falta subscriptionId" }), {
+    if (!token) {
+      return new Response(JSON.stringify({ error: "Falta token" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
 
-    if (status !== "1") {
-      return new Response(JSON.stringify({ received: true, action: "ignored", reason: `status=${status}` }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
-      });
+    // Verificar el pago contra la API de Flow (no confiar en el POST entrante)
+    const { apiKey, secretKey } = getFlowCredentials();
+    const statusResult = await flowApiCall("/payment/getStatus", { apiKey, token }, secretKey) as {
+      status?: number; flowOrder?: number; commerceOrder?: string;
+    };
+
+    // Flow status: 1=pending, 2=paid, 3=rejected, 4=cancelled
+    if (!statusResult.status || statusResult.status !== 2) {
+      return new Response(JSON.stringify({
+        received: true, action: "ignored",
+        reason: `status=${statusResult.status}, not confirmed`
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     const planName = planIdToName[planId] ?? "business";
 
-    // Buscar el billing customer por email
-    const { data: cust } = await adminClient.from("billing_customers").select("user_id").eq("email", customerEmail).maybeSingle();
+    const { data: cust } = await adminClient.from("billing_customers")
+      .select("user_id").eq("email", customerEmail).maybeSingle();
+
     if (!cust) {
-      return new Response(JSON.stringify({ received: true, action: "ignored", reason: "no billing customer found" }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
-      });
+      return new Response(JSON.stringify({
+        received: true, action: "ignored", reason: "no billing customer"
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // Crear o actualizar suscripcion para soly
     await adminClient.from("subscriptions").upsert({
-      user_id: cust.user_id,
-      product: "soly",
-      plan: planName,
-      status: "active",
-      provider: "flow",
-      provider_subscription_id: providerSubscriptionId,
+      user_id: cust.user_id, product: "soly", plan: planName,
+      status: "active", provider: "flow",
+      provider_subscription_id: String(statusResult.flowOrder ?? token),
       provider_customer_id: customerEmail,
       current_period_start: new Date().toISOString()
     }, { onConflict: "user_id,product" });

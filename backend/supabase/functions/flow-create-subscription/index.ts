@@ -12,21 +12,31 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    const { user_id, plan, product = "soly" } = await req.json();
-    if (!user_id || !plan) {
-      return new Response(JSON.stringify({ error: "Faltan user_id y plan" }), {
+    const token = req.headers.get("Authorization")?.replace("Bearer ", "");
+    if (!token) {
+      return new Response(JSON.stringify({ error: "No autorizado" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+    const { data: userData, error: authError } = await adminClient.auth.getUser(token);
+    if (authError || !userData.user) {
+      return new Response(JSON.stringify({ error: "No autorizado" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    const { plan } = await req.json();
+    if (!plan) {
+      return new Response(JSON.stringify({ error: "Falta plan" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
 
     const { apiKey, secretKey } = getFlowCredentials();
     const planId = getPlanId(plan);
-
-    const { data: user } = await adminClient.auth.admin.getUserById(user_id);
-    if (!user?.user) throw new Error("Usuario no encontrado");
-
-    const email = user.user.email ?? "";
-    const commerceOrder = `${product}-${user_id.slice(0, 8)}-${Date.now()}`;
+    const userId = userData.user.id;
+    const email = userData.user.email ?? "";
+    const commerceOrder = `soly-${userId.slice(0, 8)}-${Date.now()}`;
 
     const params: Record<string, string> = {
       apiKey, planId, customerEmail: email,
@@ -39,8 +49,7 @@ serve(async (req) => {
     const result = await flowApiCall("/subscription/create", params, secretKey) as { url?: string };
     if (!result.url) throw new Error("Flow no devolvio URL de pago");
 
-    // Guardar intento de suscripcion
-    await adminClient.from("billing_customers").upsert({ user_id, email: email, provider: "flow" }, { onConflict: "user_id,provider" });
+    await adminClient.from("billing_customers").upsert({ user_id: userId, email, provider: "flow" }, { onConflict: "user_id,provider" });
 
     return new Response(JSON.stringify({ url: result.url }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" }
