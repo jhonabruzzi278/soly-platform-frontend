@@ -7,41 +7,29 @@ const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
-  }
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    const { tenant_id } = await req.json();
-
-    if (!tenant_id) {
-      return new Response(JSON.stringify({ error: "Falta tenant_id" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
+    const { subscription_id } = await req.json();
+    if (!subscription_id) {
+      return new Response(JSON.stringify({ error: "Falta subscription_id" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
 
-    const { data: org, error: orgError } = await adminClient
-      .from("tenants")
-      .select("flow_subscription_id")
-      .eq("id", tenant_id)
-      .single();
+    const { error } = await adminClient
+      .from("subscriptions")
+      .update({ status: "cancelled", cancelled_at: new Date().toISOString() })
+      .eq("id", subscription_id);
 
-    if (orgError) throw orgError;
-
-    if (org.flow_subscription_id) {
-      await adminClient.rpc("cancel_flow_subscription", {
-        p_flow_subscription_id: org.flow_subscription_id
-      });
-    }
+    if (error) throw error;
 
     return new Response(JSON.stringify({ success: true }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" }
     });
   } catch (err) {
     return new Response(JSON.stringify({ error: err.message }), {
-      status: 400,
-      headers: { ...corsHeaders, "Content-Type": "application/json" }
+      status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" }
     });
   }
 });

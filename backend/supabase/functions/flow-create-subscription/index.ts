@@ -9,71 +9,45 @@ const publicUrl = Deno.env.get("PUBLIC_URL") ?? "http://localhost:5173";
 const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
-  }
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    const { tenant_id, plan } = await req.json();
-
-    if (!tenant_id || !plan) {
-      return new Response(JSON.stringify({ error: "Faltan tenant_id y plan" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
+    const { user_id, plan, product = "soly" } = await req.json();
+    if (!user_id || !plan) {
+      return new Response(JSON.stringify({ error: "Faltan user_id y plan" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
 
     const { apiKey, secretKey } = getFlowCredentials();
     const planId = getPlanId(plan);
 
-    const { data: org, error: orgError } = await adminClient
-      .from("tenants")
-      .select("slug, business_name")
-      .eq("id", tenant_id)
-      .single();
+    const { data: user } = await adminClient.auth.admin.getUserById(user_id);
+    if (!user?.user) throw new Error("Usuario no encontrado");
 
-    if (orgError) throw orgError;
-
-    const { data: member } = await adminClient
-      .from("memberships")
-      .select("user_id")
-      .eq("tenant_id", tenant_id)
-      .eq("role", "owner")
-      .single();
-
-    let customerEmail = "";
-    if (member) {
-      const { data: authUser } = await adminClient.auth.admin.getUserById(member.user_id);
-      customerEmail = authUser.user?.email ?? "";
-    }
-
-    const commerceOrder = `${org.slug}-${Date.now()}`;
-    const confirmationUrl = `${publicUrl}/billing?billing=success`;
-    const returnUrl = `${publicUrl}/billing?billing=cancelled`;
+    const email = user.user.email ?? "";
+    const commerceOrder = `${product}-${user_id.slice(0, 8)}-${Date.now()}`;
 
     const params: Record<string, string> = {
-      apiKey,
-      planId,
-      customerEmail,
-      customerName: org.business_name,
+      apiKey, planId, customerEmail: email,
+      customerName: email.split("@")[0],
       commerceOrder,
-      urlConfirmation: confirmationUrl,
-      urlReturn: returnUrl
+      urlConfirmation: `${publicUrl}/billing?billing=success`,
+      urlReturn: `${publicUrl}/billing?billing=cancelled`
     };
 
-    const result = await flowApiCall("/subscription/create", params, secretKey) as { url?: string; token?: string; flowOrder?: number };
+    const result = await flowApiCall("/subscription/create", params, secretKey) as { url?: string };
+    if (!result.url) throw new Error("Flow no devolvio URL de pago");
 
-    if (!result.url) {
-      throw new Error("Flow no devolvio URL de pago");
-    }
+    // Guardar intento de suscripcion
+    await adminClient.from("billing_customers").upsert({ user_id, email: email, provider: "flow" }, { onConflict: "user_id,provider" });
 
     return new Response(JSON.stringify({ url: result.url }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" }
     });
   } catch (err) {
     return new Response(JSON.stringify({ error: err.message }), {
-      status: 400,
-      headers: { ...corsHeaders, "Content-Type": "application/json" }
+      status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" }
     });
   }
 });

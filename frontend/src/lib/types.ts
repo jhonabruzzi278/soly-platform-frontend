@@ -33,8 +33,6 @@ export type Tenant = {
   business_subtitle: string | null;
   plan: PlanKey;
   product: string;
-  flow_subscription_id: string | null;
-  flow_customer_email: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -94,5 +92,17 @@ export type AppointmentEnriched = {
   cost: number;
   status: string;
   comments: string | null;
+  created_at: string;
+};
+
+export type Subscription = {
+  id: string;
+  user_id: string;
+  product: string;
+  plan: PlanKey;
+  status: "active" | "cancelled" | "expired" | "trialing";
+  provider: string;
+  provider_subscription_id: string | null;
+  current_period_end: string | null;
   created_at: string;
 };

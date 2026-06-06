@@ -323,7 +323,7 @@ export const SettingsPage = () => {
           <CardContent className="pt-0">
             <Button variant="outline" onClick={() => window.location.href = "/billing"}>
               <MaterialIcon name="workspace_premium" size={18} />
-              {tenant?.flow_subscription_id ? "Gestionar suscripcion" : "Ver planes disponibles"}
+              Ver planes disponibles
             </Button>
           </CardContent>
         </Card>

@@ -1,5 +1,5 @@
 ﻿import { supabase, supabaseUrl, supabaseAnonKey, invokeEdgeFunction } from "./supabase";
-import { StorageFile, Tenant, Membership, InviteMemberPayload, DashboardKpi, Customer, AppointmentEnriched } from "./types";
+import { StorageFile, Tenant, Membership, InviteMemberPayload, DashboardKpi, Customer, AppointmentEnriched, Subscription } from "./types";
 
 const BUCKET_NAME = import.meta.env.VITE_SUPABASE_BUCKET ?? "excel-files";
 
@@ -132,19 +132,43 @@ export const countTenantSeats = async (tenantId: string): Promise<number> => {
 };
 
 // =========================
-// Flow.cl Billing
+// Flow.cl Billing (subscriptions)
 // =========================
 
-export const createFlowSubscription = async (tenantId: string, plan: string) => {
+export const createFlowSubscription = async (userId: string, plan: string) => {
   const data = await invokeEdgeFunction<Record<string, unknown>, { url: string }>(
     "flow-create-subscription",
-    { tenant_id: tenantId, plan }
+    { user_id: userId, plan, product: "soly" }
   );
   return data;
 };
 
-export const cancelFlowSubscription = async (tenantId: string) => {
-  await invokeEdgeFunction("flow-cancel-subscription", { tenant_id: tenantId });
+export const cancelFlowSubscription = async (subId: string) => {
+  await invokeEdgeFunction("flow-cancel-subscription", { subscription_id: subId });
+};
+
+export const fetchUserSubscription = async (userId: string): Promise<Subscription | null> => {
+  const { data, error } = await supabase
+    .from("subscriptions")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("product", "soly")
+    .eq("status", "active")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data;
+};
+
+export const hasActiveSubscription = async (userId: string): Promise<boolean> => {
+  const { data, error } = await supabase.rpc("has_active_subscription", {
+    p_user_id: userId,
+    p_product: "soly"
+  });
+  if (error) throw error;
+  return data;
 };
 
 // =========================
