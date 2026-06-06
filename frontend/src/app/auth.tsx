@@ -104,6 +104,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
         email: normalizedEmail, password,
         options: { data: { name, tenant_name: businessName, tenant_id: slug, plan: "starter", role: "owner" } }
       });
+      console.log("[Auth] signUp result:", { error: signUpErr?.message, email: normalizedEmail });
 
       // If user already exists (e.g. from Logify), silently create Soly tenant
       if (signUpErr && signUpErr.message.includes("already")) {

@@ -27,12 +27,15 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
     }
 
     try {
+      console.log("[Tenant] fetching for userId:", session.userId);
       const { data: row, error } = await supabase
         .from("memberships")
         .select("tenant_id, user_id, role, created_at")
         .eq("user_id", session.userId)
         .limit(1)
         .maybeSingle();
+
+      console.log("[Tenant] memberships result:", { hasRow: !!row, error: error?.message });
 
       if (error || !row) {
         setTenant(null);
