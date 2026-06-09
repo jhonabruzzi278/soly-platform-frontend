@@ -10,7 +10,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["1.jpg", "favicon.svg"],
+      includeAssets: ["pwa-192.png", "pwa-512.png", "favicon.svg"],
       devOptions: {
         enabled: true
       },
@@ -24,19 +24,19 @@ export default defineConfig({
         start_url: "/",
         icons: [
           {
-            src: "/1.jpg",
+            src: "/pwa-192.png",
             sizes: "192x192",
-            type: "image/jpeg"
+            type: "image/png"
           },
           {
-            src: "/1.jpg",
+            src: "/pwa-512.png",
             sizes: "512x512",
-            type: "image/jpeg"
+            type: "image/png"
           },
           {
-            src: "/1.jpg",
+            src: "/pwa-512.png",
             sizes: "512x512",
-            type: "image/jpeg",
+            type: "image/png",
             purpose: "maskable"
           }
         ]

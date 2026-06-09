@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { useTenant } from "../../hooks/useTenant";
-import { fetchCustomers, createCustomer, updateCustomer, deleteCustomer } from "../../lib/api";
+import { useCustomers } from "../../hooks/useCustomers";
 import { currency, shortDate } from "../../lib/format";
 import { Customer } from "../../lib/types";
 import { DataTable } from "../../components/common/DataTable";
@@ -19,31 +19,22 @@ const emptyCustomer = (): Partial<Customer> => ({
 
 export const CustomersPage = () => {
   const { tenant } = useTenant();
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const {
+    customers,
+    isLoading,
+    error,
+    createCustomer,
+    updateCustomer,
+    deleteCustomer,
+    isCreating,
+    isUpdating,
+    isDeleting
+  } = useCustomers(tenant?.id);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Customer | null>(null);
   const [form, setForm] = useState<Partial<Customer>>(emptyCustomer());
-  const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<{ tone: "default" | "danger"; title: string; description: string } | null>(null);
-
-  const load = useCallback(async () => {
-    if (!tenant) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await fetchCustomers(tenant.id);
-      setCustomers(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al cargar clientes.");
-    } finally {
-      setLoading(false);
-    }
-  }, [tenant?.id]);
-
-  useEffect(() => { void load(); }, [load]);
 
   const openCreate = () => {
     setEditing(null);
@@ -61,20 +52,16 @@ export const CustomersPage = () => {
 
   const save = async () => {
     if (!tenant || !form.name?.trim()) return;
-    setSaving(true);
     setFeedback(null);
     try {
       if (editing) {
-        await updateCustomer(editing.id, { name: form.name, email: form.email, phone: form.phone, notes: form.notes });
+        await updateCustomer({ id: editing.id, payload: { name: form.name, email: form.email, phone: form.phone, notes: form.notes } });
       } else {
-        await createCustomer(tenant.id, { name: form.name, email: form.email, phone: form.phone, notes: form.notes });
+        await createCustomer({ name: form.name, email: form.email, phone: form.phone, notes: form.notes });
       }
       setModalOpen(false);
-      await load();
     } catch (err) {
       setFeedback({ tone: "danger", title: "Error", description: err instanceof Error ? err.message : "No se pudo guardar." });
-    } finally {
-      setSaving(false);
     }
   };
 
@@ -82,7 +69,6 @@ export const CustomersPage = () => {
     if (!window.confirm(`Eliminar a "${name}"?`)) return;
     try {
       await deleteCustomer(id);
-      await load();
     } catch (err) {
       setFeedback({ tone: "danger", title: "Error", description: err instanceof Error ? err.message : "No se pudo eliminar." });
     }
@@ -102,7 +88,7 @@ export const CustomersPage = () => {
           <Button variant="ghost" size="sm" onClick={() => openEdit(r)}>
             <MaterialIcon name="edit" size={16} />
           </Button>
-          <Button variant="ghost" size="sm" className="text-[var(--destructive)]" onClick={() => void remove(r.id, r.name)}>
+          <Button variant="ghost" size="sm" className="text-[var(--destructive)]" onClick={() => void remove(r.id, r.name)} disabled={isDeleting}>
             <MaterialIcon name="delete" size={16} />
           </Button>
         </div>
@@ -124,9 +110,9 @@ export const CustomersPage = () => {
       </div>
 
       {feedback ? <SurfaceMessage tone={feedback.tone} title={feedback.title} description={feedback.description} /> : null}
-      {error ? <SurfaceMessage tone="danger" title="Error" description={error} /> : null}
+      {error ? <SurfaceMessage tone="danger" title="Error" description={error.message} /> : null}
 
-      {loading ? (
+      {isLoading ? (
         <p className="text-sm text-[var(--muted-foreground)]">Cargando clientes...</p>
       ) : (
         <DataTable rows={customers} columns={columns} getRowKey={(r) => r.id} emptyMessage="No hay clientes registrados." />
@@ -143,8 +129,8 @@ export const CustomersPage = () => {
 
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="outline" onClick={() => setModalOpen(false)}>Cancelar</Button>
-            <Button onClick={() => void save()} disabled={saving}>
-              {saving ? "Guardando..." : "Guardar"}
+            <Button onClick={() => void save()} disabled={isCreating || isUpdating}>
+              {(isCreating || isUpdating) ? "Guardando..." : "Guardar"}
             </Button>
           </div>
         </div>

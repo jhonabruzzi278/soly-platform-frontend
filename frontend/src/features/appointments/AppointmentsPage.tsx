@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { useTenant } from "../../hooks/useTenant";
-import { fetchCustomers, fetchAppointments, createAppointment, updateAppointment } from "../../lib/api";
+import { useAppointments } from "../../hooks/useAppointments";
+import { useCustomers } from "../../hooks/useCustomers";
 import { currency } from "../../lib/format";
-import { AppointmentEnriched, Customer } from "../../lib/types";
+import { AppointmentEnriched } from "../../lib/types";
 import { DataTable } from "../../components/common/DataTable";
 import { MaterialIcon } from "../../components/common/MaterialIcon";
 import { Modal } from "../../components/common/Modal";
@@ -21,36 +22,22 @@ const statusLabels: Record<string, string> = {
 
 export const AppointmentsPage = () => {
   const { tenant } = useTenant();
-  const [appointments, setAppointments] = useState<AppointmentEnriched[]>([]);
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const {
+    appointments,
+    isLoading: loadingAppointments,
+    error: appointmentsError,
+    createAppointment,
+    updateAppointment,
+    isCreating,
+    isUpdating
+  } = useAppointments(tenant?.id);
+
+  const { customers, isLoading: loadingCustomers } = useCustomers(tenant?.id);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<AppointmentEnriched | null>(null);
   const [form, setForm] = useState<Partial<AppointmentEnriched>>({});
-  const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<{ tone: "default" | "danger"; title: string; description: string } | null>(null);
-
-  const load = useCallback(async () => {
-    if (!tenant) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const [apts, custs] = await Promise.all([
-        fetchAppointments(tenant.id),
-        fetchCustomers(tenant.id)
-      ]);
-      setAppointments(apts);
-      setCustomers(custs);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al cargar.");
-    } finally {
-      setLoading(false);
-    }
-  }, [tenant?.id]);
-
-  useEffect(() => { void load(); }, [load]);
 
   const openCreate = () => {
     setEditing(null);
@@ -74,7 +61,6 @@ export const AppointmentsPage = () => {
 
   const save = async () => {
     if (!tenant || !form.customer_id || !form.appointment_date || !form.service_name) return;
-    setSaving(true);
     setFeedback(null);
     try {
       const payload = {
@@ -86,16 +72,13 @@ export const AppointmentsPage = () => {
         status: form.status
       };
       if (editing) {
-        await updateAppointment(editing.id, payload);
+        await updateAppointment({ id: editing.id, payload });
       } else {
-        await createAppointment(tenant.id, payload);
+        await createAppointment(payload);
       }
       setModalOpen(false);
-      await load();
     } catch (err) {
       setFeedback({ tone: "danger", title: "Error", description: err instanceof Error ? err.message : "No se pudo guardar." });
-    } finally {
-      setSaving(false);
     }
   };
 
@@ -122,6 +105,9 @@ export const AppointmentsPage = () => {
     }
   ];
 
+  const isLoading = loadingAppointments || loadingCustomers;
+  const error = appointmentsError;
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -136,9 +122,9 @@ export const AppointmentsPage = () => {
       </div>
 
       {feedback ? <SurfaceMessage tone={feedback.tone} title={feedback.title} description={feedback.description} /> : null}
-      {error ? <SurfaceMessage tone="danger" title="Error" description={error} /> : null}
+      {error ? <SurfaceMessage tone="danger" title="Error" description={error.message} /> : null}
 
-      {loading ? (
+      {isLoading ? (
         <p className="text-sm text-[var(--muted-foreground)]">Cargando citas...</p>
       ) : (
         <DataTable rows={appointments} columns={columns} getRowKey={(r) => r.id} emptyMessage="No hay citas registradas." />
@@ -180,8 +166,8 @@ export const AppointmentsPage = () => {
 
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="outline" onClick={() => setModalOpen(false)}>Cancelar</Button>
-            <Button onClick={() => void save()} disabled={saving}>
-              {saving ? "Guardando..." : "Guardar"}
+            <Button onClick={() => void save()} disabled={isCreating || isUpdating}>
+              {(isCreating || isUpdating) ? "Guardando..." : "Guardar"}
             </Button>
           </div>
         </div>

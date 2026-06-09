@@ -104,7 +104,6 @@ export function AuthProvider({ children }: PropsWithChildren) {
         email: normalizedEmail, password,
         options: { data: { name, tenant_name: businessName, tenant_id: slug, plan: "starter", role: "owner" } }
       });
-      console.log("[Auth] signUp result:", { error: signUpErr?.message, email: normalizedEmail });
 
       // If user already exists (e.g. from Logify), silently create Soly tenant
       if (signUpErr && signUpErr.message.includes("already")) {
@@ -145,25 +144,30 @@ export function useAuth() {
   return context;
 }
 
+const EXEMPT_PATHS = ["/login", "/billing", "/configuracion", "/recuperar-password"];
+
 export function RequireAuth() {
   const { session, loading } = useAuth();
   const location = useLocation();
   const [hasSub, setHasSub] = useState<boolean | null>(null);
 
-  const exemptPaths = ["/login", "/billing", "/configuracion", "/recuperar-password"];
-
   useEffect(() => {
-    if (!session?.userId) return;
-    if (exemptPaths.some(p => location.pathname.startsWith(p))) {
+    if (!session?.userId) {
+      setHasSub(false);
+      return;
+    }
+    if (EXEMPT_PATHS.some(p => location.pathname.startsWith(p))) {
       setHasSub(true);
       return;
     }
     supabase.rpc("has_active_subscription", { p_user_id: session.userId, p_product: "soly" })
       .then(({ data }) => setHasSub(!!data));
-  }, [session?.userId, location.pathname]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.userId]);
 
-  if (loading || hasSub === null) return <div className="theme-shell grid min-h-screen place-items-center">Cargando...</div>;
+  if (loading) return <div className="theme-shell grid min-h-screen place-items-center">Cargando...</div>;
   if (!session) return <Navigate to="/login" replace state={{ from: location.pathname }} />;
-  if (!hasSub && !exemptPaths.some(p => location.pathname.startsWith(p))) return <Navigate to="/billing" replace />;
+  if (hasSub === null) return <div className="theme-shell grid min-h-screen place-items-center">Cargando...</div>;
+  if (!hasSub && !EXEMPT_PATHS.some(p => location.pathname.startsWith(p))) return <Navigate to="/billing" replace />;
   return <Outlet />;
 }

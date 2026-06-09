@@ -1,4 +1,5 @@
-﻿import { Navigate, Route, Routes, Outlet } from "react-router-dom";
+﻿import { lazy, Suspense } from "react";
+import { Navigate, Route, Routes, Outlet } from "react-router-dom";
 import { useAuth, RequireAuth } from "../app/auth";
 import { useTenant } from "../hooks/useTenant";
 import { MainLayout } from "../components/layout/MainLayout";
@@ -6,13 +7,20 @@ import { FeatureGate } from "../components/common/FeatureGate";
 import { LoginPage } from "../features/auth/LoginPage";
 import { PasswordRecoveryPage } from "../features/auth/PasswordRecoveryPage";
 import { DashboardPage } from "../features/dashboard/DashboardPage";
-import { ExcelUploadPage } from "../features/files/ExcelUploadPage";
-import { CustomersPage } from "../features/customers/CustomersPage";
-import { AppointmentsPage } from "../features/appointments/AppointmentsPage";
-import { ReportsPage } from "../features/reports/ReportsPage";
-import { BillingPage } from "../features/billing/BillingPage";
-import { SettingsPage } from "../features/settings/SettingsPage";
 import { Profile } from "../lib/types";
+
+const ExcelUploadPage = lazy(() => import("../features/files/ExcelUploadPage").then(m => ({ default: m.ExcelUploadPage })));
+const CustomersPage = lazy(() => import("../features/customers/CustomersPage").then(m => ({ default: m.CustomersPage })));
+const AppointmentsPage = lazy(() => import("../features/appointments/AppointmentsPage").then(m => ({ default: m.AppointmentsPage })));
+const ReportsPage = lazy(() => import("../features/reports/ReportsPage").then(m => ({ default: m.ReportsPage })));
+const BillingPage = lazy(() => import("../features/billing/BillingPage").then(m => ({ default: m.BillingPage })));
+const SettingsPage = lazy(() => import("../features/settings/SettingsPage").then(m => ({ default: m.SettingsPage })));
+
+const PageLoader = () => (
+  <div className="theme-shell grid min-h-[200px] place-items-center">
+    <p className="text-sm text-[var(--muted-foreground)]">Cargando...</p>
+  </div>
+);
 
 function TenantLayout() {
   const { session } = useAuth();
@@ -26,12 +34,14 @@ function TenantLayout() {
     id: session.userId,
     email: session.email,
     full_name: session.name,
-    role: session.role === "owner" ? "admin" : "user"
+    role: (session.role === "owner" || session.role === "admin") ? "admin" : "user"
   };
 
   return (
     <MainLayout tenant={tenant} profile={profile}>
-      <Outlet />
+      <Suspense fallback={<PageLoader />}>
+        <Outlet />
+      </Suspense>
     </MainLayout>
   );
 }

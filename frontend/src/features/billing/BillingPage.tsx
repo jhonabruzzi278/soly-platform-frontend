@@ -3,12 +3,26 @@ import { useSearchParams } from "react-router-dom";
 import { useAuth } from "../../app/auth";
 import { useTenant } from "../../hooks/useTenant";
 import { createFlowSubscription, cancelFlowSubscription, fetchUserSubscription } from "../../lib/api";
-import { PlanKey, PLAN_META } from "../../lib/features";
+import { PlanKey, PLAN_META, PLAN_LIMITS } from "../../lib/features";
 import { Subscription } from "../../lib/types";
 import { SurfaceMessage } from "../../components/common/SurfaceMessage";
 import { MaterialIcon } from "../../components/common/MaterialIcon";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
+
+const PLAN_FEATURES: Record<PlanKey, string[]> = {
+  starter: ["1 usuario", "Hasta 100 archivos", "Dashboard basico"],
+  pro: ["5 usuarios", "Hasta 1,000 archivos", "Dashboard + Reportes", "KPIs avanzados"],
+  business: ["20 usuarios", "Hasta 10,000 archivos", "Todo de Pro", "Clientes y citas", "Inventario"],
+  enterprise: ["Usuarios ilimitados", "Archivos ilimitados", "Todo de Business", "SSO y SLA", "Acceso a API"]
+};
+
+const STATUS_LABELS: Record<string, { label: string; tone: "default" | "success" | "warning" | "danger" }> = {
+  active: { label: "Activa", tone: "success" },
+  trialing: { label: "En prueba", tone: "warning" },
+  cancelled: { label: "Cancelada", tone: "danger" },
+  expired: { label: "Expirada", tone: "danger" }
+};
 
 export const BillingPage = () => {
   const { session } = useAuth();
@@ -44,6 +58,11 @@ export const BillingPage = () => {
   }, [searchParams]);
 
   const handleUpgrade = async (planKey: string) => {
+    if (planKey === "starter") return;
+    if (planKey === "enterprise") {
+      setMessage({ tone: "default", title: "Contactar ventas", description: "Envia un email a ventas@soly.cl para el plan Enterprise." });
+      return;
+    }
     setLoading(planKey);
     setMessage(null);
     try {
@@ -71,8 +90,20 @@ export const BillingPage = () => {
     }
   };
 
-  const currentPlan = (subscription?.plan ?? "starter") as PlanKey;
+  const currentPlan = (subscription?.plan ?? tenant?.plan ?? "starter") as PlanKey;
   const currentPlanMeta = PLAN_META[currentPlan];
+  const statusInfo = subscription?.status ? STATUS_LABELS[subscription.status] : null;
+
+  const getTrialDaysLeft = () => {
+    if (!subscription?.trial_ends_at) return null;
+    const now = new Date();
+    const trialEnd = new Date(subscription.trial_ends_at);
+    const diffMs = trialEnd.getTime() - now.getTime();
+    const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+    return diffDays > 0 ? diffDays : 0;
+  };
+
+  const trialDaysLeft = getTrialDaysLeft();
 
   return (
     <div className="space-y-6">
@@ -87,10 +118,28 @@ export const BillingPage = () => {
         <Card className="rounded-xl border border-transparent shadow-[var(--neu-shadow-raised)]">
           <CardHeader>
             <CardTitle>Tu suscripcion</CardTitle>
-            <CardDescription>Plan: <strong>{currentPlanMeta.label}</strong> ({currentPlanMeta.priceLabel}) · Estado: {subscription.status}</CardDescription>
+            <CardDescription>
+              Plan: <strong>{currentPlanMeta.label}</strong> ({currentPlanMeta.priceLabel})
+              {statusInfo && (
+                <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-[var(--muted)] px-2 py-0.5 text-xs font-medium">
+                  {statusInfo.label}
+                </span>
+              )}
+            </CardDescription>
           </CardHeader>
-          <CardContent>
-            {currentPlan !== "starter" && (
+          <CardContent className="space-y-3">
+            {subscription.status === "trialing" && trialDaysLeft !== null && (
+              <p className="text-sm text-[var(--muted-foreground)]">
+                <MaterialIcon name="schedule" size={14} className="inline mr-1" />
+                {trialDaysLeft > 0 ? `${trialDaysLeft} dias restantes de prueba` : "Prueba finalizada"}
+              </p>
+            )}
+            {subscription.current_period_end && subscription.status === "active" && (
+              <p className="text-sm text-[var(--muted-foreground)]">
+                Proximo cobro: {new Date(subscription.current_period_end).toLocaleDateString("es-CL")}
+              </p>
+            )}
+            {currentPlan !== "starter" && subscription.status !== "cancelled" && (
               <Button variant="outline" onClick={() => void handleCancel()} disabled={loading === "cancel"}>
                 <MaterialIcon name="cancel" size={18} />
                 {loading === "cancel" ? "Cancelando..." : "Cancelar suscripcion"}
@@ -100,23 +149,70 @@ export const BillingPage = () => {
         </Card>
       ) : null}
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-2">
-        {(["business"] as const).map((planKey) => {
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        {(["starter", "pro", "business", "enterprise"] as const).map((planKey) => {
           const meta = PLAN_META[planKey];
+          const features = PLAN_FEATURES[planKey];
+          const limits = PLAN_LIMITS[planKey];
           const isCurrent = currentPlan === planKey;
+          const isPopular = planKey === "business";
+
           return (
-            <Card key={planKey} className={`rounded-xl border border-transparent shadow-[var(--neu-shadow-raised)] ${isCurrent ? "border-[var(--primary)] bg-[var(--primary)]/5" : ""}`}>
+            <Card
+              key={planKey}
+              className={`relative rounded-xl border transition-all ${
+                isCurrent
+                  ? "border-[var(--primary)] bg-[var(--primary)]/5 shadow-[var(--neu-shadow-raised)]"
+                  : isPopular
+                  ? "border-[var(--primary)]/50 shadow-[var(--neu-shadow-raised)]"
+                  : "border-transparent shadow-[var(--neu-shadow-raised)]"
+              }`}
+            >
+              {isPopular && !isCurrent && (
+                <div className="absolute -top-2 left-1/2 -translate-x-1/2 rounded-full bg-[var(--primary)] px-3 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
+                  Popular
+                </div>
+              )}
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-lg">{meta.label}</CardTitle>
-                  {isCurrent && <span className="rounded-full border border-[var(--primary)] bg-[var(--primary)]/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[var(--primary)]">Actual</span>}
+                  {isCurrent && (
+                    <span className="rounded-full border border-[var(--primary)] bg-[var(--primary)]/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[var(--primary)]">
+                      Actual
+                    </span>
+                  )}
                 </div>
                 <p className="mt-1 text-2xl font-bold">{meta.priceLabel}</p>
                 <CardDescription className="mt-2 text-sm">{meta.description}</CardDescription>
               </CardHeader>
-              <CardContent>
-                <Button onClick={() => void handleUpgrade(planKey)} disabled={isCurrent || loading !== null} variant={isCurrent ? "outline" : "default"} className="w-full">
-                  {isCurrent ? "Plan actual" : "Upgrade"}
+              <CardContent className="space-y-4">
+                <ul className="space-y-2 text-sm">
+                  {features.map((feature, i) => (
+                    <li key={i} className="flex items-start gap-2">
+                      <MaterialIcon name="check_circle" size={14} className="mt-0.5 text-[var(--primary)]" />
+                      <span>{feature}</span>
+                    </li>
+                  ))}
+                  <li className="flex items-start gap-2">
+                    <MaterialIcon name="group" size={14} className="mt-0.5 text-[var(--muted-foreground)]" />
+                    <span className="text-[var(--muted-foreground)]">
+                      {limits.seats === Infinity ? "Usuarios ilimitados" : `Hasta ${limits.seats} ${limits.seats === 1 ? "usuario" : "usuarios"}`}
+                    </span>
+                  </li>
+                </ul>
+                <Button
+                  onClick={() => void handleUpgrade(planKey)}
+                  disabled={isCurrent || loading !== null}
+                  variant={isCurrent ? "outline" : isPopular ? "default" : "ghost"}
+                  className="w-full"
+                >
+                  {isCurrent
+                    ? "Plan actual"
+                    : planKey === "starter"
+                    ? "Comenzar gratis"
+                    : planKey === "enterprise"
+                    ? "Contactar ventas"
+                    : "Suscribirse"}
                 </Button>
               </CardContent>
             </Card>
@@ -125,8 +221,28 @@ export const BillingPage = () => {
       </div>
 
       <Card className="rounded-xl border border-transparent shadow-[var(--neu-shadow-raised)]">
-        <CardHeader><CardTitle>Plan Starter (Gratis)</CardTitle><CardDescription>{PLAN_META.starter.description}</CardDescription></CardHeader>
-        <CardContent><p className="text-sm text-[var(--muted-foreground)]">Comienza gratis. Pago procesado via Flow.cl.</p></CardContent>
+        <CardHeader>
+          <CardTitle>Pagos seguros via Flow.cl</CardTitle>
+          <CardDescription>
+            Flow.cl es la pasarela de pagos lider en Chile. Acepta tarjetas de credito, debito y transferencias bancarias.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center gap-4 text-sm text-[var(--muted-foreground)]">
+            <div className="flex items-center gap-1">
+              <MaterialIcon name="lock" size={14} />
+              <span>Pagos seguros</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <MaterialIcon name="autorenew" size={14} />
+              <span>Cancela cuando quieras</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <MaterialIcon name="support_agent" size={14} />
+              <span>Soporte en espanol</span>
+            </div>
+          </div>
+        </CardContent>
       </Card>
     </div>
   );

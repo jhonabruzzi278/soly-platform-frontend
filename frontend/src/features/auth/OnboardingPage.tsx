@@ -30,23 +30,18 @@ export const OnboardingPage = () => {
     setLoading(true);
     setError(null);
     try {
-      console.log("[Onboarding] creating:", email.trim().toLowerCase());
-      const pwd = password;
       await createTenant({
         email: email.trim().toLowerCase(),
-        password: pwd,
+        password: password,
         business_name: businessName.trim(),
         slug: slug || businessName.trim().toLowerCase().replace(/\s+/g, "-"),
         plan: "starter"
       });
 
-      console.log("[Onboarding] tenant created, signing in...");
-      const { error: signError } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password: pwd });
+      const { error: signError } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
       if (signError) throw signError;
-      console.log("[Onboarding] done");
       setDone(true);
     } catch (err) {
-      console.error("[Onboarding] error:", err);
       setError(err instanceof Error ? err.message : "No se pudo crear la cuenta.");
     } finally {
       setLoading(false);

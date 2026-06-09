@@ -1,46 +1,22 @@
-import { useCallback, useEffect, useState } from "react";
+import { useMemo } from "react";
 import { useTenant } from "../../hooks/useTenant";
+import { useReports } from "../../hooks/useReports";
 import { currency } from "../../lib/format";
-import { fetchRevenueByBarber, fetchRevenueByService, fetchAppointmentsPerDay } from "../../lib/api";
 import { KpiCard } from "../../components/common/KpiCard";
 import { MaterialIcon } from "../../components/common/MaterialIcon";
 import { SurfaceMessage } from "../../components/common/SurfaceMessage";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 
-type RevenueRow = { barber_name?: string; service_name?: string; revenue: number; day?: string; total?: number; appointment_date?: string };
-
 export const ReportsPage = () => {
   const { tenant } = useTenant();
-  const [revenueByBarber, setRevenueByBarber] = useState<RevenueRow[]>([]);
-  const [revenueByService, setRevenueByService] = useState<RevenueRow[]>([]);
-  const [appointmentsPerDay, setAppointmentsPerDay] = useState<RevenueRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { revenueByBarber, revenueByService, appointmentsPerDay, isLoading, error } = useReports();
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const [barberRes, serviceRes, dayRes] = await Promise.all([
-        fetchRevenueByBarber(),
-        fetchRevenueByService(),
-        fetchAppointmentsPerDay()
-      ]);
-      setRevenueByBarber(barberRes);
-      setRevenueByService(serviceRes);
-      setAppointmentsPerDay(dayRes);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al cargar reportes.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const totalRevenue = useMemo(
+    () => revenueByBarber.reduce((s, r) => s + (r.revenue ?? 0), 0),
+    [revenueByBarber]
+  );
 
-  useEffect(() => { void load(); }, [load]);
-
-  const totalRevenue = revenueByBarber.reduce((s, r) => s + (r.revenue ?? 0), 0);
-
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="space-y-4">
         <h1 className="text-2xl font-semibold">Reportes</h1>
@@ -53,7 +29,7 @@ export const ReportsPage = () => {
     return (
       <div className="space-y-4">
         <h1 className="text-2xl font-semibold">Reportes</h1>
-        <SurfaceMessage tone="danger" title="Error" description={error} />
+        <SurfaceMessage tone="danger" title="Error" description={error.message} />
       </div>
     );
   }
