@@ -79,6 +79,12 @@ Deno.serve(async (req) => {
           plan
         }
       })
+    }).catch((fetchError) => {
+      // Manejar errores de red/DNS específicamente
+      if (fetchError.message.includes('dns') || fetchError.message.includes('network') || fetchError.message.includes('fetch')) {
+        throw new Error('Payment service temporarily unavailable. Please try again in a few minutes.')
+      }
+      throw fetchError
     })
 
     if (!flowResponse.ok) {
