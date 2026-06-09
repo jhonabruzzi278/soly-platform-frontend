@@ -1,12 +1,12 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { getCorsHeaders, handleCorsOptions } from '../_shared/cors.ts'
+import { applyRateLimit } from '../_shared/rate-limit.ts'
 
 const VALID_TABLES = ['customers', 'appointments', 'services', 'inventory_products'] as const
 const VALID_COLUMN_REGEX = /^[a-z_][a-z0-9_]{0,63}$/
-const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
+const MAX_FILE_SIZE = 10 * 1024 * 1024
 const MAX_ROWS = 10_000
 
-// Whitelist of allowed columns per table — prevents injection of arbitrary columns
 const ALLOWED_COLUMNS: Record<string, string[]> = {
   customers: ['name', 'email', 'email_alt', 'phone', 'phone_alt_1', 'phone_alt_2', 'company', 'address', 'notes', 'tags'],
   appointments: ['customer_id', 'barber_id', 'appointment_date', 'appointment_time', 'service_name', 'cost', 'status', 'comments', 'address', 'city', 'state', 'country', 'postal_code', 'staff_name'],
@@ -37,6 +37,9 @@ Deno.serve(async (req) => {
       throw new Error('Unauthorized')
     }
 
+    const rateLimitResponse = await applyRateLimit(req, 'import-data', user.id)
+    if (rateLimitResponse) return rateLimitResponse
+
     const { file_path, table } = await req.json()
 
     if (!file_path || !table) {
@@ -47,7 +50,6 @@ Deno.serve(async (req) => {
       throw new Error('Invalid table')
     }
 
-    // Derive tenant_id from user's membership (zero-trust)
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -66,7 +68,6 @@ Deno.serve(async (req) => {
 
     const tenantId = membership.tenant_id
 
-    // Validate file_path to prevent path traversal
     const sanitizedPath = file_path.replace(/\.\./g, '').replace(/\/\//g, '/')
     if (sanitizedPath !== file_path || !file_path.startsWith(tenantId)) {
       throw new Error('Invalid file path')
@@ -80,7 +81,6 @@ Deno.serve(async (req) => {
       throw new Error('Failed to download file')
     }
 
-    // File size limit
     if (fileData.size > MAX_FILE_SIZE) {
       throw new Error(`File too large (max ${MAX_FILE_SIZE / 1024 / 1024}MB)`)
     }
@@ -92,12 +92,10 @@ Deno.serve(async (req) => {
       throw new Error('File is empty or has no data rows')
     }
 
-    // Row limit
     if (lines.length - 1 > MAX_ROWS) {
       throw new Error(`Too many rows (max ${MAX_ROWS.toLocaleString()})`)
     }
 
-    // Sanitize and whitelist headers
     const tableAllowedCols = ALLOWED_COLUMNS[table] || []
     const rawHeaders = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/[^a-z0-9_]/g, '_'))
     const headers = rawHeaders.filter(h => VALID_COLUMN_REGEX.test(h) && tableAllowedCols.includes(h))
@@ -120,18 +118,37 @@ Deno.serve(async (req) => {
       tenant_id: tenantId
     }))
 
+    // PG-01 FIX: For appointments import, disable rollup trigger and do batch refresh after
+    const isAppointmentsImport = table === 'appointments'
+    
+    if (isAppointmentsImport) {
+      await supabaseAdmin.rpc('disable_rollup_trigger')
+    }
+
     const batchSize = 100
     let imported = 0
     const errors: string[] = []
 
-    for (let i = 0; i < rowsWithTenant.length; i += batchSize) {
-      const batch = rowsWithTenant.slice(i, i + batchSize)
-      const { error } = await supabaseAdmin.from(table).insert(batch)
+    try {
+      for (let i = 0; i < rowsWithTenant.length; i += batchSize) {
+        const batch = rowsWithTenant.slice(i, i + batchSize)
+        const { error } = await supabaseAdmin.from(table).insert(batch)
 
-      if (error) {
-        errors.push(`Batch ${i / batchSize + 1}: ${error.message}`)
-      } else {
-        imported += batch.length
+        if (error) {
+          errors.push(`Batch ${i / batchSize + 1}: ${error.message}`)
+        } else {
+          imported += batch.length
+        }
+      }
+
+      // PG-01 FIX: After appointments import, do batch rollup refresh
+      if (isAppointmentsImport && imported > 0) {
+        await supabaseAdmin.rpc('refresh_customer_rollup_batch', { p_tenant_id: tenantId })
+      }
+    } finally {
+      // Always re-enable trigger, even if import failed
+      if (isAppointmentsImport) {
+        await supabaseAdmin.rpc('enable_rollup_trigger')
       }
     }
 

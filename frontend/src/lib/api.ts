@@ -88,7 +88,7 @@ export const updateTenant = async (tenantId: string, payload: Partial<Tenant>) =
 export const fetchTenantMembers = async (tenantId: string): Promise<Membership[]> => {
   const { data, error } = await supabase
     .from("memberships")
-    .select("*, tenants(*)")
+    .select("*, tenants(*), profiles:user_id(id, email, full_name)")
     .eq("tenant_id", tenantId)
     .order("created_at", { ascending: true });
 
@@ -98,7 +98,9 @@ export const fetchTenantMembers = async (tenantId: string): Promise<Membership[]
     user_id: row.user_id,
     role: row.role,
     created_at: row.created_at,
-    tenant: row.tenants
+    tenant: row.tenants,
+    email: row.profiles?.email ?? null,
+    full_name: row.profiles?.full_name ?? null
   })) as Membership[];
 };
 
@@ -153,7 +155,7 @@ export const fetchUserSubscription = async (userId: string): Promise<Subscriptio
     .select("*")
     .eq("user_id", userId)
     .eq("product", "soly")
-    .eq("status", "active")
+    .in("status", ["active", "trialing"])
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -236,6 +238,12 @@ export const fetchDashboardKpis = async (): Promise<DashboardKpi> => {
 // Customers
 // =========================
 
+export interface PaginatedResponse<T> {
+  data: T[];
+  has_more: boolean;
+  next_cursor: string | null;
+}
+
 export const fetchCustomers = async (tenantId: string): Promise<Customer[]> => {
   const { data, error } = await supabase
     .from("customers")
@@ -245,6 +253,21 @@ export const fetchCustomers = async (tenantId: string): Promise<Customer[]> => {
 
   if (error) throw error;
   return data ?? [];
+};
+
+export const fetchCustomersPaginated = async (
+  tenantId: string,
+  cursor: string | null = null,
+  limit: number = 50
+): Promise<PaginatedResponse<Customer>> => {
+  const { data, error } = await supabase.rpc("get_customers_paginated", {
+    p_tenant_id: tenantId,
+    p_cursor: cursor,
+    p_limit: limit
+  });
+
+  if (error) throw error;
+  return data as PaginatedResponse<Customer>;
 };
 
 export const createCustomer = async (tenantId: string, payload: Partial<Customer>) => {
@@ -290,6 +313,21 @@ export const fetchAppointments = async (tenantId: string): Promise<AppointmentEn
   return data ?? [];
 };
 
+export const fetchAppointmentsPaginated = async (
+  tenantId: string,
+  cursor: string | null = null,
+  limit: number = 50
+): Promise<PaginatedResponse<AppointmentEnriched>> => {
+  const { data, error } = await supabase.rpc("get_appointments_paginated", {
+    p_tenant_id: tenantId,
+    p_cursor: cursor,
+    p_limit: limit
+  });
+
+  if (error) throw error;
+  return data as PaginatedResponse<AppointmentEnriched>;
+};
+
 export const createAppointment = async (tenantId: string, payload: Partial<AppointmentEnriched>) => {
   const { data, error } = await supabase
     .from("appointments")
@@ -311,6 +349,29 @@ export const updateAppointment = async (id: string, payload: Partial<Appointment
 
   if (error) throw error;
   return data;
+};
+
+// =========================
+// User Session (from DB - source of truth)
+// =========================
+
+export interface UserSession {
+  user_id: string;
+  email: string;
+  full_name: string | null;
+  role: string;
+  tenant_id: string | null;
+  tenant_slug: string | null;
+  tenant_name: string | null;
+  tenant_plan: string | null;
+  membership_role: string | null;
+}
+
+export const fetchUserSession = async (): Promise<UserSession | null> => {
+  const { data, error } = await supabase.rpc("get_user_session");
+
+  if (error) throw error;
+  return data as UserSession | null;
 };
 
 // =========================

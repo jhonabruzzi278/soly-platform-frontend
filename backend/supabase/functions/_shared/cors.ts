@@ -4,14 +4,25 @@ const ALLOWED_ORIGINS = [
   'https://www.soly.cl',
 ]
 
+const DEV_ORIGINS = [
+  'http://localhost:5111',
+  'http://localhost:5173',
+  'http://localhost:3000',
+]
+
 if (Deno.env.get('ENVIRONMENT') === 'development') {
-  ALLOWED_ORIGINS.push('http://localhost:5173', 'http://localhost:3000')
+  ALLOWED_ORIGINS.push(...DEV_ORIGINS)
 }
 
 export function getCorsHeaders(req: Request): Record<string, string> {
   const origin = req.headers.get('origin') ?? ''
+  
+  // Always allow localhost for local development
+  const isLocalhost = origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:')
+  const isAllowed = ALLOWED_ORIGINS.includes(origin) || isLocalhost
+  
   return {
-    'Access-Control-Allow-Origin': ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0],
+    'Access-Control-Allow-Origin': isAllowed ? origin : ALLOWED_ORIGINS[0],
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
   }

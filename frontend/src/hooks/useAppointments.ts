@@ -1,13 +1,17 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { fetchAppointments, createAppointment, updateAppointment } from "../lib/api";
+import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { fetchAppointmentsPaginated, createAppointment, updateAppointment } from "../lib/api";
 import { AppointmentEnriched } from "../lib/types";
+
+const PAGE_SIZE = 50;
 
 export const useAppointments = (tenantId: string | undefined) => {
   const queryClient = useQueryClient();
 
-  const appointmentsQuery = useQuery({
+  const appointmentsQuery = useInfiniteQuery({
     queryKey: ["appointments", tenantId],
-    queryFn: () => fetchAppointments(tenantId!),
+    queryFn: ({ pageParam }) => fetchAppointmentsPaginated(tenantId!, pageParam, PAGE_SIZE),
+    initialPageParam: null as string | null,
+    getNextPageParam: (lastPage) => lastPage.has_more ? lastPage.next_cursor : undefined,
     enabled: !!tenantId,
     staleTime: 30_000,
     retry: 2
@@ -28,11 +32,18 @@ export const useAppointments = (tenantId: string | undefined) => {
     }
   });
 
+  const allAppointments = appointmentsQuery.data?.pages.flatMap(page => page.data) ?? [];
+  const lastPage = appointmentsQuery.data?.pages[appointmentsQuery.data.pages.length - 1];
+  const hasMore = lastPage?.has_more ?? false;
+
   return {
-    appointments: appointmentsQuery.data ?? [],
+    appointments: allAppointments,
     isLoading: appointmentsQuery.isLoading,
     error: appointmentsQuery.error,
     refetch: appointmentsQuery.refetch,
+    fetchNextPage: appointmentsQuery.fetchNextPage,
+    hasNextPage: hasMore,
+    isFetchingNextPage: appointmentsQuery.isFetchingNextPage,
     createAppointment: createMutation.mutateAsync,
     updateAppointment: updateMutation.mutateAsync,
     isCreating: createMutation.isPending,

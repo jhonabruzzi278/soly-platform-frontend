@@ -46,6 +46,8 @@ export type Membership = {
   role: MemberRole;
   created_at: string;
   tenant?: Tenant;
+  email?: string | null;
+  full_name?: string | null;
 };
 
 export type InviteMemberPayload = {

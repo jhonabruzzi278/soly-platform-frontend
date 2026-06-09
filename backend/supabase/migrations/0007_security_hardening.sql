@@ -13,6 +13,13 @@
 UPDATE public.profiles SET role = 'member'
 WHERE role NOT IN ('owner', 'admin', 'member', 'viewer');
 
+-- Drop policies that depend on the role column before altering type
+DROP POLICY IF EXISTS "profiles_self_insert" ON public.profiles;
+
+-- Drop the default first, then change type, then set new default
+ALTER TABLE public.profiles
+  ALTER COLUMN role DROP DEFAULT;
+
 ALTER TABLE public.profiles
   DROP CONSTRAINT IF EXISTS profiles_role_check;
 
@@ -22,8 +29,7 @@ ALTER TABLE public.profiles
 ALTER TABLE public.profiles
   ALTER COLUMN role SET DEFAULT 'member'::org_role;
 
--- Tighten the self-insert policy to only allow 'member' role
-DROP POLICY IF EXISTS "profiles_self_insert" ON public.profiles;
+-- Recreate the policy with the new enum type
 CREATE POLICY "profiles_self_insert" ON public.profiles FOR INSERT
   WITH CHECK (id = auth.uid() AND role = 'member'::org_role);
 

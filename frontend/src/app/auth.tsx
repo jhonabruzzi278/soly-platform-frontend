@@ -1,6 +1,7 @@
-import { createContext, useContext, useEffect, useMemo, useState, type PropsWithChildren } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type PropsWithChildren } from "react";
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { supabase, supabaseUrl, supabaseAnonKey } from "../lib/supabase";
+import { fetchUserSession, type UserSession } from "../lib/api";
 import type { Session as SupabaseSession, User } from "@supabase/supabase-js";
 
 type SolyRole = "owner" | "admin" | "member";
@@ -22,6 +23,7 @@ interface AuthContextValue {
   login: (credentials: { email: string; password: string }) => Promise<Session>;
   signup: (data: { email: string; password: string; name: string; businessName: string }) => Promise<Session>;
   logout: () => Promise<void>;
+  refreshSession: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -34,7 +36,7 @@ function translateAuthError(message: string): string {
     return "Email o contrasena incorrectos.";
   if (lower.includes("password") && (lower.includes("weak") || lower.includes("short")))
     return "La contrasena es muy debil. Minimo 6 caracteres.";
-  if (lower.includes("email") && lower.includes("invalid"))
+  if (lower.includes("email") && (lower.includes("invalid")))
     return "El formato del correo electronico no es valido.";
   if (lower.includes("rate limit") || lower.includes("too many requests"))
     return "Demasiados intentos. Espera unos segundos.";
@@ -47,8 +49,8 @@ function translateAuthError(message: string): string {
   return message;
 }
 
-function buildSession(user: User | null, supabaseSession: SupabaseSession | null): Session | null {
-  if (!user || !supabaseSession) return null;
+function buildSessionFromMetadata(user: User | null): Session | null {
+  if (!user) return null;
   const meta = (user.user_metadata ?? {}) as Record<string, unknown>;
   return {
     userId: user.id,
@@ -61,27 +63,75 @@ function buildSession(user: User | null, supabaseSession: SupabaseSession | null
   };
 }
 
+function buildSessionFromDb(dbSession: UserSession): Session {
+  return {
+    userId: dbSession.user_id,
+    role: (dbSession.membership_role as SolyRole) || "member",
+    name: dbSession.full_name || dbSession.email?.split("@")[0] || "Usuario",
+    email: dbSession.email,
+    tenantId: dbSession.tenant_id ?? "",
+    tenantName: dbSession.tenant_name ?? "",
+    tenantPlan: dbSession.tenant_plan ?? "starter"
+  };
+}
+
 export function AuthProvider({ children }: PropsWithChildren) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const refreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const loadSessionFromDb = async (user: User | null): Promise<Session | null> => {
+    if (!user) return null;
+    try {
+      const dbSession = await fetchUserSession();
+      if (dbSession) {
+        return buildSessionFromDb(dbSession);
+      }
+    } catch {
+      // Fall back to metadata if DB call fails
+    }
+    return buildSessionFromMetadata(user);
+  };
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session: sbSession } }) => {
-      if (sbSession?.user) setSession(buildSession(sbSession.user, sbSession));
+    supabase.auth.getSession().then(async ({ data: { session: sbSession } }) => {
+      if (sbSession?.user) {
+        const s = await loadSessionFromDb(sbSession.user);
+        setSession(s);
+      }
       setLoading(false);
     }).catch(() => {
       setLoading(false);
     });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, sbSession) => {
-      setSession(sbSession?.user ? buildSession(sbSession.user, sbSession!) : null);
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, sbSession) => {
+      if (sbSession?.user) {
+        const s = await loadSessionFromDb(sbSession.user);
+        setSession(s);
+      } else {
+        setSession(null);
+      }
       setLoading(false);
     });
-    return () => subscription.unsubscribe();
+
+    return () => {
+      subscription.unsubscribe();
+      if (refreshTimerRef.current) clearInterval(refreshTimerRef.current);
+    };
   }, []);
+
+  const refreshSession = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const s = await loadSessionFromDb(user);
+      setSession(s);
+    }
+  };
 
   const value = useMemo<AuthContextValue>(() => ({
     session, loading, error,
+    refreshSession,
     async login({ email, password }) {
       setLoading(true);
       setError(null);
@@ -91,7 +141,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
         setError(msg); setLoading(false);
         throw new Error(msg);
       }
-      const s = buildSession(data.session.user, data.session);
+      const s = await loadSessionFromDb(data.session.user);
       if (!s) { setError("No se pudo iniciar sesion"); setLoading(false); throw new Error("No session"); }
       setSession(s); setLoading(false);
       return s;
@@ -107,7 +157,6 @@ export function AuthProvider({ children }: PropsWithChildren) {
         options: { data: { name, tenant_name: businessName, tenant_id: slug, plan: "starter", role: "owner" } }
       });
 
-      // If user already exists (e.g. from Logify), silently create Soly tenant
       if (signUpErr && signUpErr.message.includes("already")) {
         const resp = await fetch(`${supabaseUrl}/functions/v1/create-organization`, {
           method: "POST",
@@ -126,7 +175,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       if (loginErr || !loginData.session) {
         throw new Error("Cuenta lista. Inicia sesion en la pestana Login.");
       }
-      const s = buildSession(loginData.session.user, loginData.session);
+      const s = await loadSessionFromDb(loginData.session.user);
       if (!s) throw new Error("No se pudo iniciar sesion");
       setSession(s); setLoading(false);
       return s;

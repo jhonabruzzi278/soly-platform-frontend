@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { getCorsHeaders, handleCorsOptions } from '../_shared/cors.ts'
+import { applyRateLimit } from '../_shared/rate-limit.ts'
 
 Deno.serve(async (req) => {
   const corsResponse = handleCorsOptions(req)
@@ -23,6 +24,9 @@ Deno.serve(async (req) => {
     if (!user) {
       throw new Error('Unauthorized')
     }
+
+    const rateLimitResponse = await applyRateLimit(req, 'flow-cancel-subscription', user.id)
+    if (rateLimitResponse) return rateLimitResponse
 
     const { subscription_id } = await req.json()
     if (!subscription_id) {

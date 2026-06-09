@@ -23,6 +23,9 @@ export const CustomersPage = () => {
     customers,
     isLoading,
     error,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
     createCustomer,
     updateCustomer,
     deleteCustomer,
@@ -115,7 +118,21 @@ export const CustomersPage = () => {
       {isLoading ? (
         <p className="text-sm text-[var(--muted-foreground)]">Cargando clientes...</p>
       ) : (
-        <DataTable rows={customers} columns={columns} getRowKey={(r) => r.id} emptyMessage="No hay clientes registrados." />
+        <>
+          <DataTable rows={customers} columns={columns} getRowKey={(r) => r.id} emptyMessage="No hay clientes registrados." />
+          {hasNextPage && (
+            <div className="flex justify-center pt-4">
+              <Button
+                variant="outline"
+                onClick={() => void fetchNextPage()}
+                disabled={isFetchingNextPage}
+              >
+                <MaterialIcon name="expand_more" size={16} />
+                {isFetchingNextPage ? "Cargando..." : "Cargar más"}
+              </Button>
+            </div>
+          )}
+        </>
       )}
 
       <Modal open={modalOpen} title={editing ? "Editar cliente" : "Nuevo cliente"} onClose={() => setModalOpen(false)} size="md">

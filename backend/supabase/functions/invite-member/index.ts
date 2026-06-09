@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { getCorsHeaders, handleCorsOptions } from '../_shared/cors.ts'
+import { applyRateLimit } from '../_shared/rate-limit.ts'
 
 const ALLOWED_INVITE_ROLES = ['member', 'admin'] as const
 
@@ -25,6 +26,9 @@ Deno.serve(async (req) => {
     if (!user) {
       throw new Error('Unauthorized')
     }
+
+    const rateLimitResponse = await applyRateLimit(req, 'invite-member', user.id)
+    if (rateLimitResponse) return rateLimitResponse
 
     const { tenant_id, email, role: rawRole = 'member' } = await req.json()
 
@@ -61,7 +65,7 @@ Deno.serve(async (req) => {
 
     const { data: tenant, error: tenantError } = await supabaseClient
       .from('tenants')
-      .select('plan')
+      .select('plan, slug')
       .eq('id', tenant_id)
       .single()
 
@@ -92,64 +96,20 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    // Find user by email with filtered query instead of loading all users
-    const { data: usersByEmail } = await supabaseAdmin.auth.admin.listUsers({
-      page: 1,
-      perPage: 1,
+    // Always invite by email — the auth trigger will auto-create membership
+    // when the user accepts the invitation and creates their account.
+    // This avoids paginating all users (which was a critical performance issue).
+    const { error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
+      data: {
+        tenant_id,
+        tenant_name: tenant.slug ?? tenant_id,
+        role,
+        invited_by: user.id
+      }
     })
 
-    // Use a targeted lookup: search through users matching the email
-    let invitedUser = null
-    let page = 1
-    const perPage = 50
-    while (true) {
-      const { data: batch } = await supabaseAdmin.auth.admin.listUsers({ page, perPage })
-      if (!batch?.users || batch.users.length === 0) break
-      const found = batch.users.find(u => u.email === email)
-      if (found) { invitedUser = found; break }
-      if (batch.users.length < perPage) break
-      page++
-    }
-
-    if (invitedUser) {
-      // Check not already a member
-      const { data: existingMembership } = await supabaseAdmin
-        .from('memberships')
-        .select('user_id')
-        .eq('tenant_id', tenant_id)
-        .eq('user_id', invitedUser.id)
-        .maybeSingle()
-
-      if (existingMembership) {
-        throw new Error('User is already a member of this organization')
-      }
-
-      await supabaseAdmin.from('memberships').insert({
-        tenant_id,
-        user_id: invitedUser.id,
-        role
-      })
-
-      await supabaseAdmin.from('tenant_seats').insert({
-        tenant_id,
-        user_id: invitedUser.id,
-        is_active: true
-      })
-
-      await supabaseAdmin.from('profiles').update({ tenant_id }).eq('id', invitedUser.id)
-    } else {
-      const { error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
-        data: {
-          tenant_id,
-          tenant_name: tenant_id,
-          role,
-          invited_by: user.id
-        }
-      })
-
-      if (inviteError) {
-        throw inviteError
-      }
+    if (inviteError) {
+      throw inviteError
     }
 
     return new Response(

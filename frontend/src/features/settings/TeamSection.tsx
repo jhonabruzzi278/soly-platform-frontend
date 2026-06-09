@@ -102,8 +102,11 @@ export const TeamSection = ({ onFeedback }: Props) => {
             {members.map((m) => (
               <div key={m.user_id} className="flex items-center justify-between rounded-xl border border-transparent bg-[var(--muted)]/35 px-4 py-3 shadow-[var(--neu-shadow-raised)]">
                 <div>
-                  <p className="text-sm font-medium">{m.user_id}</p>
-                  <p className="text-xs text-[var(--muted-foreground)]">
+                  <p className="text-sm font-medium">{m.full_name || m.email || m.user_id}</p>
+                  {m.full_name && m.email && (
+                    <p className="text-xs text-[var(--muted-foreground)]">{m.email}</p>
+                  )}
+                  <p className="mt-1 text-xs text-[var(--muted-foreground)]">
                     <span className="rounded-full border border-[var(--primary)]/20 bg-[var(--primary)]/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[var(--primary)]">
                       {m.role}
                     </span>

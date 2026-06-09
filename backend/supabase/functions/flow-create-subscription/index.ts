@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { getCorsHeaders, handleCorsOptions } from '../_shared/cors.ts'
+import { applyRateLimit } from '../_shared/rate-limit.ts'
 
 const VALID_PLANS = ['pro', 'business', 'enterprise'] as const
 
@@ -25,6 +26,9 @@ Deno.serve(async (req) => {
     if (!user) {
       throw new Error('Unauthorized')
     }
+
+    const rateLimitResponse = await applyRateLimit(req, 'flow-create-subscription', user.id)
+    if (rateLimitResponse) return rateLimitResponse
 
     const { plan } = await req.json()
     if (!plan || !(VALID_PLANS as readonly string[]).includes(plan)) {

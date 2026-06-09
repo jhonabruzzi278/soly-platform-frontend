@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { getCorsHeaders, handleCorsOptions } from '../_shared/cors.ts'
+import { applyRateLimit } from '../_shared/rate-limit.ts'
 
 const ALLOWED_PLANS = ['starter'] as const
 const SLUG_REGEX = /^[a-z0-9]{1,30}$/
@@ -11,6 +12,9 @@ Deno.serve(async (req) => {
   const corsHeaders = getCorsHeaders(req)
 
   try {
+    const rateLimitResponse = await applyRateLimit(req, 'create-organization')
+    if (rateLimitResponse) return rateLimitResponse
+
     const { email, password, business_name, slug, plan: rawPlan } = await req.json()
 
     if (!email || !password || !business_name || !slug) {

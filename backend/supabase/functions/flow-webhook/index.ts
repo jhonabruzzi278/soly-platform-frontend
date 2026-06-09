@@ -1,6 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { createHmac, timingSafeEqual } from 'https://deno.land/std@0.177.0/node/crypto.ts'
 import { getCorsHeaders, handleCorsOptions } from '../_shared/cors.ts'
+import { applyRateLimit } from '../_shared/rate-limit.ts'
 
 Deno.serve(async (req) => {
   const corsResponse = handleCorsOptions(req)
@@ -9,6 +10,9 @@ Deno.serve(async (req) => {
   const corsHeaders = getCorsHeaders(req)
 
   try {
+    const rateLimitResponse = await applyRateLimit(req, 'flow-webhook')
+    if (rateLimitResponse) return rateLimitResponse
+
     const body = await req.text()
     const signature = req.headers.get('X-Flow-Signature')
 
@@ -54,7 +58,6 @@ Deno.serve(async (req) => {
     }
 
     // Idempotency: check if we already processed this exact event
-    const idempotencyKey = payload.id || payload.flow_order || `${eventType}-${subscriptionId}-${Date.now()}`
     const { data: existingEvent } = await supabaseAdmin
       .from('billing_webhook_events')
       .select('id')
@@ -71,7 +74,8 @@ Deno.serve(async (req) => {
       )
     }
 
-    await supabaseAdmin.from('billing_webhook_events').insert({
+    // Insert event record — handle unique constraint violation (idempotency at DB level)
+    const { error: insertError } = await supabaseAdmin.from('billing_webhook_events').insert({
       provider: 'flow',
       event_type: eventType,
       raw_payload: payload,
@@ -79,14 +83,39 @@ Deno.serve(async (req) => {
       processed: false
     })
 
+    // If unique constraint violation, this is a duplicate event
+    if (insertError && insertError.code === '23505') {
+      return new Response(
+        JSON.stringify({ received: true, duplicate: true }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+      )
+    }
+
+    if (insertError) {
+      throw insertError
+    }
+
+    // Extract billing period from Flow payload (or calculate from subscription)
+    const periodStart = payload.current_period_start
+      || payload.data?.current_period_start
+      || payload.billing_period?.start
+      || new Date().toISOString()
+
+    const periodEnd = payload.current_period_end
+      || payload.data?.current_period_end
+      || payload.billing_period?.end
+      || (dbSubscription?.current_period_end
+        ? new Date(new Date(dbSubscription.current_period_end).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString()
+        : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString())
+
     if (eventType === 'subscription.paid' || eventType === 'payment.completed') {
       if (dbSubscription) {
         await supabaseAdmin
           .from('subscriptions')
           .update({
             status: 'active',
-            current_period_start: new Date().toISOString(),
-            current_period_end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+            current_period_start: periodStart,
+            current_period_end: periodEnd
           })
           .eq('id', dbSubscription.id)
       }

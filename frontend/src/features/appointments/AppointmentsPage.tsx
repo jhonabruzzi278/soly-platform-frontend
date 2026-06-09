@@ -26,6 +26,9 @@ export const AppointmentsPage = () => {
     appointments,
     isLoading: loadingAppointments,
     error: appointmentsError,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
     createAppointment,
     updateAppointment,
     isCreating,
@@ -127,7 +130,21 @@ export const AppointmentsPage = () => {
       {isLoading ? (
         <p className="text-sm text-[var(--muted-foreground)]">Cargando citas...</p>
       ) : (
-        <DataTable rows={appointments} columns={columns} getRowKey={(r) => r.id} emptyMessage="No hay citas registradas." />
+        <>
+          <DataTable rows={appointments} columns={columns} getRowKey={(r) => r.id} emptyMessage="No hay citas registradas." />
+          {hasNextPage && (
+            <div className="flex justify-center pt-4">
+              <Button
+                variant="outline"
+                onClick={() => void fetchNextPage()}
+                disabled={isFetchingNextPage}
+              >
+                <MaterialIcon name="expand_more" size={16} />
+                {isFetchingNextPage ? "Cargando..." : "Cargar más"}
+              </Button>
+            </div>
+          )}
+        </>
       )}
 
       <Modal open={modalOpen} title={editing ? "Editar cita" : "Nueva cita"} onClose={() => setModalOpen(false)} size="md">
