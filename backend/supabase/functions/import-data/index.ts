@@ -3,6 +3,16 @@ import { getCorsHeaders, handleCorsOptions } from '../_shared/cors.ts'
 
 const VALID_TABLES = ['customers', 'appointments', 'services', 'inventory_products'] as const
 const VALID_COLUMN_REGEX = /^[a-z_][a-z0-9_]{0,63}$/
+const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
+const MAX_ROWS = 10_000
+
+// Whitelist of allowed columns per table — prevents injection of arbitrary columns
+const ALLOWED_COLUMNS: Record<string, string[]> = {
+  customers: ['name', 'email', 'email_alt', 'phone', 'phone_alt_1', 'phone_alt_2', 'company', 'address', 'notes', 'tags'],
+  appointments: ['customer_id', 'barber_id', 'appointment_date', 'appointment_time', 'service_name', 'cost', 'status', 'comments', 'address', 'city', 'state', 'country', 'postal_code', 'staff_name'],
+  services: ['name', 'price'],
+  inventory_products: ['name', 'supplier', 'cost', 'sale_price', 'stock', 'min_stock', 'safety_stock', 'purchase_date'],
+}
 
 Deno.serve(async (req) => {
   const corsResponse = handleCorsOptions(req)
@@ -70,6 +80,11 @@ Deno.serve(async (req) => {
       throw new Error('Failed to download file')
     }
 
+    // File size limit
+    if (fileData.size > MAX_FILE_SIZE) {
+      throw new Error(`File too large (max ${MAX_FILE_SIZE / 1024 / 1024}MB)`)
+    }
+
     const text = await fileData.text()
     const lines = text.split('\n').filter(line => line.trim())
 
@@ -77,12 +92,18 @@ Deno.serve(async (req) => {
       throw new Error('File is empty or has no data rows')
     }
 
-    // Sanitize headers — reject columns that don't match safe pattern
+    // Row limit
+    if (lines.length - 1 > MAX_ROWS) {
+      throw new Error(`Too many rows (max ${MAX_ROWS.toLocaleString()})`)
+    }
+
+    // Sanitize and whitelist headers
+    const tableAllowedCols = ALLOWED_COLUMNS[table] || []
     const rawHeaders = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/[^a-z0-9_]/g, '_'))
-    const headers = rawHeaders.filter(h => VALID_COLUMN_REGEX.test(h))
+    const headers = rawHeaders.filter(h => VALID_COLUMN_REGEX.test(h) && tableAllowedCols.includes(h))
 
     if (headers.length === 0) {
-      throw new Error('No valid column headers found')
+      throw new Error(`No valid column headers found. Allowed columns for ${table}: ${tableAllowedCols.join(', ')}`)
     }
 
     const rows = lines.slice(1).map(line => {
