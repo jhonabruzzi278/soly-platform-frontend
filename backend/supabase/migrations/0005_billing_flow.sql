@@ -129,7 +129,8 @@ security definer
 set search_path = public
 as $$
 declare
-  v_expired_count integer;
+  v_expired_count integer := 0;
+  v_batch_count integer;
 begin
   update public.subscriptions
   set status = 'expired',
@@ -138,7 +139,8 @@ begin
     and current_period_end is not null
     and current_period_end < now();
 
-  get diagnostics v_expired_count = row_count;
+  get diagnostics v_batch_count = row_count;
+  v_expired_count := v_batch_count;
 
   update public.subscriptions
   set status = 'expired',
@@ -147,7 +149,8 @@ begin
     and trial_ends_at is not null
     and trial_ends_at < now();
 
-  get diagnostics v_expired_count = v_expired_count + row_count;
+  get diagnostics v_batch_count = row_count;
+  v_expired_count := v_expired_count + v_batch_count;
 
   return v_expired_count;
 end;
