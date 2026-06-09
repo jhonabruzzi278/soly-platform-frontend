@@ -1,4 +1,5 @@
 import { ReactNode } from "react";
+import { useNavigate } from "react-router-dom";
 import { useTenant } from "../../hooks/useTenant";
 import { FeatureKey, hasFeature } from "../../lib/features";
 import { SurfaceMessage } from "../common/SurfaceMessage";
@@ -19,6 +20,7 @@ export const FeatureGate = ({
   showUpgradeCta = true
 }: FeatureGateProps) => {
   const { tenant, loading } = useTenant();
+  const navigate = useNavigate();
 
   if (loading) return null;
 
@@ -35,7 +37,7 @@ export const FeatureGate = ({
             showUpgradeCta ? (
               <Button
                 size="sm"
-                onClick={() => window.location.href = "/billing"}
+                onClick={() => navigate("/billing")}
               >
                 <MaterialIcon name="workspace_premium" size={16} />
                 Hacer upgrade

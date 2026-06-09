@@ -1,4 +1,4 @@
-import { createContext, ReactNode, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useTenant } from "../contexts/TenantContext";
 import { updateTenant } from "../lib/api";
 import { WorkspaceSettings } from "../lib/types";
@@ -44,7 +44,7 @@ export const WorkspaceProvider = ({ children }: { children: ReactNode }) => {
     document.title = title;
   }, [settings.business_name, settings.business_subtitle]);
 
-  const updateSettings = async (payload: Partial<WorkspaceSettings>) => {
+  const updateSettings = useCallback(async (payload: Partial<WorkspaceSettings>) => {
     if (!tenant) return;
     const dbPayload: Record<string, string | null> = {};
     if (payload.business_name !== undefined) dbPayload.business_name = payload.business_name;
@@ -52,9 +52,9 @@ export const WorkspaceProvider = ({ children }: { children: ReactNode }) => {
     if (Object.keys(dbPayload).length === 0) return;
     await updateTenant(tenant.id, dbPayload);
     await refetchTenant();
-  };
+  }, [tenant, refetchTenant]);
 
-  const value = useMemo(() => ({ settings, loading, updateSettings }), [settings, loading, tenant?.id]);
+  const value = useMemo(() => ({ settings, loading, updateSettings }), [settings, loading, updateSettings]);
 
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;
 };

@@ -1,14 +1,13 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { getCorsHeaders, handleCorsOptions } from '../_shared/cors.ts'
+
+const ALLOWED_INVITE_ROLES = ['member', 'admin'] as const
 
 Deno.serve(async (req) => {
-  const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  }
+  const corsResponse = handleCorsOptions(req)
+  if (corsResponse) return corsResponse
 
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
-  }
+  const corsHeaders = getCorsHeaders(req)
 
   try {
     const authHeader = req.headers.get('Authorization')
@@ -27,11 +26,18 @@ Deno.serve(async (req) => {
       throw new Error('Unauthorized')
     }
 
-    const { tenant_id, email, role = 'member' } = await req.json()
+    const { tenant_id, email, role: rawRole = 'member' } = await req.json()
 
     if (!tenant_id || !email) {
       throw new Error('Missing required fields')
     }
+
+    if (typeof email !== 'string' || !email.includes('@') || email.length > 254) {
+      throw new Error('Invalid email format')
+    }
+
+    // Validate role — never allow 'owner' escalation via invite
+    const role = (ALLOWED_INVITE_ROLES as readonly string[]).includes(rawRole) ? rawRole : 'member'
 
     const { data: membership, error: membershipError } = await supabaseClient
       .from('memberships')
@@ -46,6 +52,11 @@ Deno.serve(async (req) => {
 
     if (!['owner', 'admin'].includes(membership.role)) {
       throw new Error('Insufficient permissions')
+    }
+
+    // Admin cannot invite other admins — only owners can
+    if (role === 'admin' && membership.role !== 'owner') {
+      throw new Error('Only owners can invite admins')
     }
 
     const { data: tenant, error: tenantError } = await supabaseClient
@@ -72,7 +83,7 @@ Deno.serve(async (req) => {
       .eq('is_active', true)
 
     const limit = seatLimits[tenant.plan] || 1
-    if (currentSeats && currentSeats >= limit) {
+    if (currentSeats !== null && currentSeats >= limit) {
       throw new Error(`Seat limit reached for ${tenant.plan} plan`)
     }
 
@@ -81,10 +92,38 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    const { data: existingUser } = await supabaseAdmin.auth.admin.listUsers()
-    const invitedUser = existingUser?.users.find(u => u.email === email)
+    // Find user by email with filtered query instead of loading all users
+    const { data: usersByEmail } = await supabaseAdmin.auth.admin.listUsers({
+      page: 1,
+      perPage: 1,
+    })
+
+    // Use a targeted lookup: search through users matching the email
+    let invitedUser = null
+    let page = 1
+    const perPage = 50
+    while (true) {
+      const { data: batch } = await supabaseAdmin.auth.admin.listUsers({ page, perPage })
+      if (!batch?.users || batch.users.length === 0) break
+      const found = batch.users.find(u => u.email === email)
+      if (found) { invitedUser = found; break }
+      if (batch.users.length < perPage) break
+      page++
+    }
 
     if (invitedUser) {
+      // Check not already a member
+      const { data: existingMembership } = await supabaseAdmin
+        .from('memberships')
+        .select('user_id')
+        .eq('tenant_id', tenant_id)
+        .eq('user_id', invitedUser.id)
+        .maybeSingle()
+
+      if (existingMembership) {
+        throw new Error('User is already a member of this organization')
+      }
+
       await supabaseAdmin.from('memberships').insert({
         tenant_id,
         user_id: invitedUser.id,
@@ -122,7 +161,7 @@ Deno.serve(async (req) => {
     )
   } catch (error) {
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
+      JSON.stringify({ error: error instanceof Error ? error.message : 'Invite failed' }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 400,

@@ -70,6 +70,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
     supabase.auth.getSession().then(({ data: { session: sbSession } }) => {
       if (sbSession?.user) setSession(buildSession(sbSession.user, sbSession));
       setLoading(false);
+    }).catch(() => {
+      setLoading(false);
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, sbSession) => {
       setSession(sbSession?.user ? buildSession(sbSession.user, sbSession!) : null);
@@ -144,7 +146,7 @@ export function useAuth() {
   return context;
 }
 
-const EXEMPT_PATHS = ["/login", "/billing", "/configuracion", "/recuperar-password"];
+const EXEMPT_PATHS = ["/login", "/billing", "/recuperar-password"];
 
 export function RequireAuth() {
   const { session, loading } = useAuth();
@@ -160,10 +162,11 @@ export function RequireAuth() {
       setHasSub(true);
       return;
     }
+    let cancelled = false;
     supabase.rpc("has_active_subscription", { p_user_id: session.userId, p_product: "soly" })
-      .then(({ data }) => setHasSub(!!data));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session?.userId]);
+      .then(({ data }) => { if (!cancelled) setHasSub(!!data); });
+    return () => { cancelled = true; };
+  }, [session?.userId, location.pathname]);
 
   if (loading) return <div className="theme-shell grid min-h-screen place-items-center">Cargando...</div>;
   if (!session) return <Navigate to="/login" replace state={{ from: location.pathname }} />;

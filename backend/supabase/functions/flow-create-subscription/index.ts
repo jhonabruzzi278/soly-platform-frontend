@@ -1,14 +1,13 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { getCorsHeaders, handleCorsOptions } from '../_shared/cors.ts'
+
+const VALID_PLANS = ['pro', 'business', 'enterprise'] as const
 
 Deno.serve(async (req) => {
-  const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  }
+  const corsResponse = handleCorsOptions(req)
+  if (corsResponse) return corsResponse
 
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
-  }
+  const corsHeaders = getCorsHeaders(req)
 
   try {
     const authHeader = req.headers.get('Authorization')
@@ -28,7 +27,7 @@ Deno.serve(async (req) => {
     }
 
     const { plan } = await req.json()
-    if (!plan || !['pro', 'business', 'enterprise'].includes(plan)) {
+    if (!plan || !(VALID_PLANS as readonly string[]).includes(plan)) {
       throw new Error('Invalid plan')
     }
 
@@ -37,6 +36,19 @@ Deno.serve(async (req) => {
 
     if (!flowApiKey || !flowSecretKey) {
       throw new Error('Flow.cl not configured')
+    }
+
+    // Idempotency: check for existing active/trialing subscription
+    const { data: existingSub } = await supabaseClient
+      .from('subscriptions')
+      .select('id, status, plan')
+      .eq('user_id', user.id)
+      .eq('product', 'soly')
+      .in('status', ['active', 'trialing'])
+      .maybeSingle()
+
+    if (existingSub) {
+      throw new Error(`You already have an active ${existingSub.plan} subscription`)
     }
 
     const planPrices: Record<string, number> = {
@@ -66,8 +78,7 @@ Deno.serve(async (req) => {
     })
 
     if (!flowResponse.ok) {
-      const error = await flowResponse.text()
-      throw new Error(`Flow.cl error: ${error}`)
+      throw new Error('Failed to create subscription with payment provider')
     }
 
     const flowData = await flowResponse.json()
@@ -96,7 +107,7 @@ Deno.serve(async (req) => {
     )
   } catch (error) {
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
+      JSON.stringify({ error: error instanceof Error ? error.message : 'Subscription creation failed' }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 400,

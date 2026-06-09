@@ -1,14 +1,11 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { getCorsHeaders, handleCorsOptions } from '../_shared/cors.ts'
 
 Deno.serve(async (req) => {
-  const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  }
+  const corsResponse = handleCorsOptions(req)
+  if (corsResponse) return corsResponse
 
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
-  }
+  const corsHeaders = getCorsHeaders(req)
 
   try {
     const authHeader = req.headers.get('Authorization')
@@ -52,6 +49,7 @@ Deno.serve(async (req) => {
       throw new Error('Flow.cl not configured')
     }
 
+    // Cancel in Flow.cl FIRST — only update local DB if provider succeeds
     if (subscription.provider_subscription_id) {
       const flowResponse = await fetch(
         `https://api.flow.cl/api/v2/subscriptions/${subscription.provider_subscription_id}/cancel`,
@@ -65,8 +63,7 @@ Deno.serve(async (req) => {
       )
 
       if (!flowResponse.ok) {
-        const error = await flowResponse.text()
-        console.error(`Flow.cl cancel error: ${error}`)
+        throw new Error('Failed to cancel subscription with payment provider. Please try again.')
       }
     }
 
@@ -92,7 +89,7 @@ Deno.serve(async (req) => {
     )
   } catch (error) {
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
+      JSON.stringify({ error: error instanceof Error ? error.message : 'Cancellation failed' }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 400,

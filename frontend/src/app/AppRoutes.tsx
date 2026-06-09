@@ -3,6 +3,7 @@ import { Navigate, Route, Routes, Outlet } from "react-router-dom";
 import { useAuth, RequireAuth } from "../app/auth";
 import { useTenant } from "../hooks/useTenant";
 import { MainLayout } from "../components/layout/MainLayout";
+import { ErrorBoundary } from "../components/common/ErrorBoundary";
 import { FeatureGate } from "../components/common/FeatureGate";
 import { LoginPage } from "../features/auth/LoginPage";
 import { PasswordRecoveryPage } from "../features/auth/PasswordRecoveryPage";
@@ -48,6 +49,7 @@ function TenantLayout() {
 
 export const AppRoutes = () => {
   return (
+    <ErrorBoundary>
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/recuperar-password" element={<PasswordRecoveryPage />} />
@@ -67,5 +69,6 @@ export const AppRoutes = () => {
 
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
+    </ErrorBoundary>
   );
 };

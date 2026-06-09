@@ -1,4 +1,4 @@
-import { createContext, ReactNode, useContext, useEffect, useState } from "react";
+import { createContext, ReactNode, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { Tenant, Membership } from "../lib/types";
 import { useAuth } from "../app/auth";
@@ -18,21 +18,28 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
   const [membership, setMembership] = useState<Membership | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchTenant = async () => {
-    if (!session?.userId) {
+  const sessionUserId = session?.userId;
+  const cancelRef = useRef(false);
+
+  const fetchTenant = useCallback(async () => {
+    if (!sessionUserId) {
       setTenant(null);
       setMembership(null);
       setLoading(false);
       return;
     }
 
+    cancelRef.current = false;
+
     try {
       const { data: row, error } = await supabase
         .from("memberships")
         .select("tenant_id, user_id, role, created_at")
-        .eq("user_id", session.userId)
+        .eq("user_id", sessionUserId)
         .limit(1)
         .maybeSingle();
+
+      if (cancelRef.current) return;
 
       if (error || !row) {
         setTenant(null);
@@ -44,6 +51,8 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
           .eq("id", row.tenant_id)
           .single();
 
+        if (cancelRef.current) return;
+
         if (tenantError || !tenantData) {
           setTenant(null);
           setMembership(null);
@@ -53,18 +62,21 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
         }
       }
     } catch {
-      setTenant(null);
-      setMembership(null);
+      if (!cancelRef.current) {
+        setTenant(null);
+        setMembership(null);
+      }
     } finally {
-      setLoading(false);
+      if (!cancelRef.current) setLoading(false);
     }
-  };
+  }, [sessionUserId]);
 
   useEffect(() => {
     if (!authLoading) { void fetchTenant(); }
-  }, [authLoading, session?.userId]);
+    return () => { cancelRef.current = true; };
+  }, [authLoading, fetchTenant]);
 
-  const refetch = async () => { await fetchTenant(); };
+  const refetch = fetchTenant;
 
   return (
     <TenantContext.Provider value={{ tenant, membership, loading, refetch }}>

@@ -1,14 +1,14 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { getCorsHeaders, handleCorsOptions } from '../_shared/cors.ts'
+
+const VALID_TABLES = ['customers', 'appointments', 'services', 'inventory_products'] as const
+const VALID_COLUMN_REGEX = /^[a-z_][a-z0-9_]{0,63}$/
 
 Deno.serve(async (req) => {
-  const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  }
+  const corsResponse = handleCorsOptions(req)
+  if (corsResponse) return corsResponse
 
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
-  }
+  const corsHeaders = getCorsHeaders(req)
 
   try {
     const authHeader = req.headers.get('Authorization')
@@ -27,15 +27,39 @@ Deno.serve(async (req) => {
       throw new Error('Unauthorized')
     }
 
-    const { tenant_id, file_path, table } = await req.json()
+    const { file_path, table } = await req.json()
 
-    if (!tenant_id || !file_path || !table) {
+    if (!file_path || !table) {
       throw new Error('Missing required fields')
     }
 
-    const validTables = ['customers', 'appointments', 'services', 'inventory_products']
-    if (!validTables.includes(table)) {
+    if (!(VALID_TABLES as readonly string[]).includes(table)) {
       throw new Error('Invalid table')
+    }
+
+    // Derive tenant_id from user's membership (zero-trust)
+    const supabaseAdmin = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    )
+
+    const { data: membership, error: membershipError } = await supabaseAdmin
+      .from('memberships')
+      .select('tenant_id')
+      .eq('user_id', user.id)
+      .limit(1)
+      .single()
+
+    if (membershipError || !membership) {
+      throw new Error('User has no tenant membership')
+    }
+
+    const tenantId = membership.tenant_id
+
+    // Validate file_path to prevent path traversal
+    const sanitizedPath = file_path.replace(/\.\./g, '').replace(/\/\//g, '/')
+    if (sanitizedPath !== file_path || !file_path.startsWith(tenantId)) {
+      throw new Error('Invalid file path')
     }
 
     const { data: fileData, error: downloadError } = await supabaseClient.storage
@@ -53,7 +77,14 @@ Deno.serve(async (req) => {
       throw new Error('File is empty or has no data rows')
     }
 
-    const headers = lines[0].split(',').map(h => h.trim())
+    // Sanitize headers — reject columns that don't match safe pattern
+    const rawHeaders = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/[^a-z0-9_]/g, '_'))
+    const headers = rawHeaders.filter(h => VALID_COLUMN_REGEX.test(h))
+
+    if (headers.length === 0) {
+      throw new Error('No valid column headers found')
+    }
+
     const rows = lines.slice(1).map(line => {
       const values = line.split(',')
       const row: Record<string, string> = {}
@@ -65,7 +96,7 @@ Deno.serve(async (req) => {
 
     const rowsWithTenant = rows.map(row => ({
       ...row,
-      tenant_id
+      tenant_id: tenantId
     }))
 
     const batchSize = 100
@@ -74,7 +105,7 @@ Deno.serve(async (req) => {
 
     for (let i = 0; i < rowsWithTenant.length; i += batchSize) {
       const batch = rowsWithTenant.slice(i, i + batchSize)
-      const { error } = await supabaseClient.from(table).insert(batch)
+      const { error } = await supabaseAdmin.from(table).insert(batch)
 
       if (error) {
         errors.push(`Batch ${i / batchSize + 1}: ${error.message}`)
@@ -97,7 +128,7 @@ Deno.serve(async (req) => {
     )
   } catch (error) {
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
+      JSON.stringify({ error: error instanceof Error ? error.message : 'Import failed' }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 400,

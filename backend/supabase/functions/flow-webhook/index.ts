@@ -1,15 +1,12 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { createHmac } from 'https://deno.land/std@0.177.0/node/crypto.ts'
+import { createHmac, timingSafeEqual } from 'https://deno.land/std@0.177.0/node/crypto.ts'
+import { getCorsHeaders, handleCorsOptions } from '../_shared/cors.ts'
 
 Deno.serve(async (req) => {
-  const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  }
+  const corsResponse = handleCorsOptions(req)
+  if (corsResponse) return corsResponse
 
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
-  }
+  const corsHeaders = getCorsHeaders(req)
 
   try {
     const body = await req.text()
@@ -20,19 +17,25 @@ Deno.serve(async (req) => {
       throw new Error('Flow secret key not configured')
     }
 
-    if (signature) {
-      const hmac = createHmac('sha256', flowSecretKey)
-      hmac.update(body)
-      const expectedSignature = hmac.digest('hex')
+    if (!signature) {
+      throw new Error('Missing webhook signature')
+    }
 
-      if (signature !== expectedSignature) {
-        throw new Error('Invalid signature')
-      }
+    const expected = createHmac('sha256', flowSecretKey).update(body).digest('hex') as string
+    if (
+      signature.length !== expected.length ||
+      !timingSafeEqual(Buffer.from(signature), Buffer.from(expected))
+    ) {
+      throw new Error('Invalid signature')
     }
 
     const payload = JSON.parse(body)
     const eventType = payload.event || payload.type
     const subscriptionId = payload.subscription_id || payload.data?.subscription_id
+
+    if (!eventType) {
+      throw new Error('Missing event type')
+    }
 
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -48,6 +51,24 @@ Deno.serve(async (req) => {
         .single()
 
       dbSubscription = data
+    }
+
+    // Idempotency: check if we already processed this exact event
+    const idempotencyKey = payload.id || payload.flow_order || `${eventType}-${subscriptionId}-${Date.now()}`
+    const { data: existingEvent } = await supabaseAdmin
+      .from('billing_webhook_events')
+      .select('id')
+      .eq('provider', 'flow')
+      .eq('event_type', eventType)
+      .eq('processed', true)
+      .filter('raw_payload->>id', 'eq', payload.id || '')
+      .maybeSingle()
+
+    if (existingEvent) {
+      return new Response(
+        JSON.stringify({ received: true, duplicate: true }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+      )
     }
 
     await supabaseAdmin.from('billing_webhook_events').insert({
@@ -88,20 +109,25 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Mark event as processed
+    await supabaseAdmin
+      .from('billing_webhook_events')
+      .update({ processed: true, processed_at: new Date().toISOString() })
+      .eq('provider', 'flow')
+      .eq('event_type', eventType)
+      .eq('processed', false)
+      .filter('raw_payload->>id', 'eq', payload.id || '')
+
     return new Response(
       JSON.stringify({ received: true }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200,
-      }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     )
   } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    const status = message.includes('signature') ? 401 : 400
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 400,
-      }
+      JSON.stringify({ error: 'Webhook processing failed' }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status }
     )
   }
 })
