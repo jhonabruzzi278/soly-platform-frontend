@@ -2,7 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { getCorsHeaders, handleCorsOptions } from '../_shared/cors.ts'
 import { applyRateLimit } from '../_shared/rate-limit.ts'
 
-const VALID_PLANS = ['pro', 'business', 'enterprise'] as const
+const VALID_PLANS = ['business'] as const
 
 Deno.serve(async (req) => {
   const corsResponse = handleCorsOptions(req)
@@ -56,9 +56,7 @@ Deno.serve(async (req) => {
     }
 
     const planPrices: Record<string, number> = {
-      pro: 19000,
-      business: 49000,
-      enterprise: 99000
+      business: 49000
     }
 
     const flowResponse = await fetch('https://api.flow.cl/api/v2/subscriptions', {
