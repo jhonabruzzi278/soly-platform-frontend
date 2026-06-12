@@ -161,6 +161,39 @@ passthrough de usuario.
 
 ---
 
+## 6.b. Pasada de funcionalidad (build + consistencia DB↔código)
+
+Estado del pipeline del frontend tras las correcciones:
+
+| Gate | Resultado |
+|------|-----------|
+| `tsc --noEmit` (typecheck) | ✅ |
+| `eslint .` (lint) | ✅ 0 errores (8 warnings no bloqueantes) |
+| `vitest run` (tests) | ✅ 2/2 |
+| `vite build` | ✅ |
+
+**Lint:** se corrigieron 24 errores preexistentes que tenían el CI en rojo —
+tipados `any` en `supabase.ts`/`api.ts` reemplazados por helpers tipados, variables
+sin usar eliminadas (`BillingPage`, `navLinks`, `auth.tsx`), y el flat config de
+ESLint ahora ignora los artefactos generados de PWA (`dev-dist`, `sw.js`, `workbox-*`).
+
+**Consistencia DB↔código:** verificado que todas las RPCs que invoca el frontend
+(`get_user_session`, `has_active_subscription`, `get_dashboard_kpis`,
+`get_customers_paginated`, `get_appointments_paginated`, `tenant_has_feature`,
+`get_my_tenant_ids*`) mantienen `EXECUTE` para `authenticated` y lo perdieron para
+`anon`. El lockdown de funciones no rompe la aplicación.
+
+**Bug funcional corregido — tenants inutilizables (modelo de plan):**
+tras `0014_single_plan`, `plan_features` solo define el plan `business`, pero el
+trigger de signup creaba los tenants en `starter` (0 features) → cada tenant nuevo
+nacía sin poder usar ninguna función. `0021_single_business_plan_model` alinea el
+modelo: los tenants nacen `business` y el acceso se controla por suscripción activa
+(no por plan); la cancelación/expiración ya no degrada el plan. El tenant de prueba
+`aa` se migró a `business` + suscripción `trialing` para quedar operativo.
+
+**Observación (no corregido, requiere decisión):** el tenant `aa` tenía **2
+membresías `owner`** — huella del bug CRIT-1. Es data de prueba; se dejó intacta.
+
 ## 7. Mapa de migraciones aplicadas
 
 | Migración | Contenido |
@@ -171,6 +204,7 @@ passthrough de usuario.
 | `0018_rls_perf_fk_indexes_and_private_bucket` | CRIT-3 (bucket privado), RLS initplan, índices FK |
 | `0019_revoke_function_execute_from_anon` | REVOKE EXECUTE de `anon`/`authenticated` |
 | `0020_invitations_fk_index` | índice FK `invitations.invited_by` |
+| `0021_single_business_plan_model` | tenants nacen `business`; sin downgrade de plan; app usable |
 
 > En la nube estas migraciones quedaron registradas con timestamps
 > (`20260612142620` … `20260612143454`). Los archivos del repo usan la numeración

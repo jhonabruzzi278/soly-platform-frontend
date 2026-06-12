@@ -1,4 +1,4 @@
-﻿import { PlanKey, hasFeature, FeatureKey, PLAN_LIMITS } from "../../lib/features";
+﻿import { PlanKey, hasFeature, FeatureKey } from "../../lib/features";
 
 export type AppNavLink = {
   to: string;

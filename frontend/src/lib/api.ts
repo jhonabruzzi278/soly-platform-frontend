@@ -108,7 +108,15 @@ export const fetchTenantMembers = async (tenantId: string): Promise<Membership[]
     .order("created_at", { ascending: true });
 
   if (error) throw error;
-  return (data ?? []).map((row: any) => ({
+  type MembershipRow = {
+    tenant_id: string;
+    user_id: string;
+    role: string;
+    created_at: string;
+    tenants: Tenant | null;
+    profiles: { email: string | null; full_name: string | null } | null;
+  };
+  return ((data ?? []) as MembershipRow[]).map((row) => ({
     tenant_id: row.tenant_id,
     user_id: row.user_id,
     role: row.role,
@@ -218,7 +226,7 @@ export const createTenant = async (payload: {
 
   if (!response.ok) {
     const msg = typeof parsed === "object" && parsed !== null && "error" in parsed
-      ? (parsed as any).error
+      ? String((parsed as Record<string, unknown>).error)
       : `Error (${response.status})`;
     throw new Error(msg);
   }

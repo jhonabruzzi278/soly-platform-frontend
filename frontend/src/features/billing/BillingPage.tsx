@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useAuth } from "../../app/auth";
-import { useTenant } from "../../hooks/useTenant";
 import { createFlowSubscription, cancelFlowSubscription, fetchUserSubscription } from "../../lib/api";
 import { PLAN_META, PLAN_LIMITS } from "../../lib/features";
 import { Subscription } from "../../lib/types";
@@ -30,7 +29,6 @@ const STATUS_LABELS: Record<string, { label: string; tone: "default" | "success"
 
 export const BillingPage = () => {
   const { session } = useAuth();
-  const { tenant } = useTenant();
   const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState<string | null>(null);
   const [message, setMessage] = useState<{ tone: "default" | "danger"; title: string; description: string } | null>(null);
