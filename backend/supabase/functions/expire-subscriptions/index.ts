@@ -1,11 +1,19 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { timingSafeEqual } from 'https://deno.land/std@0.177.0/node/crypto.ts'
 import { getCorsHeaders, handleCorsOptions } from '../_shared/cors.ts'
 
-// This Edge Function expires overdue subscriptions.
-// It can be called by:
-// 1. pg_cron (if available) via SQL: SELECT expire_overdue_subscriptions()
-// 2. External cron service (cron-job.org, GitHub Actions scheduled, etc.)
-//    calling this endpoint every hour with a CRON_SECRET header for auth.
+// This Edge Function expires overdue subscriptions. It is an administrative,
+// platform-wide operation and MUST only be triggered by a trusted scheduler
+// presenting the CRON_SECRET. It is never callable by regular end users.
+
+function safeEqual(a: string, b: string): boolean {
+  const enc = new TextEncoder()
+  const ab = enc.encode(a)
+  const bb = enc.encode(b)
+  // Length check is not constant-time, but reveals only length, not content.
+  if (ab.length !== bb.length) return false
+  return timingSafeEqual(ab, bb)
+}
 
 Deno.serve(async (req) => {
   const corsResponse = handleCorsOptions(req)
@@ -14,25 +22,17 @@ Deno.serve(async (req) => {
   const corsHeaders = getCorsHeaders(req)
 
   try {
-    // Authenticate the request — either via CRON_SECRET header or internal call
+    // Authenticate: require a valid CRON_SECRET bearer token. No user passthrough.
     const cronSecret = Deno.env.get('CRON_SECRET')
-    const authHeader = req.headers.get('Authorization')
+    if (!cronSecret) {
+      throw new Error('Unauthorized — CRON_SECRET not configured')
+    }
 
-    // Allow internal calls (from pg_cron or service_role) or external with CRON_SECRET
-    const isInternalCall = authHeader?.startsWith('Bearer ey') === false && !authHeader
-    const isCronCall = cronSecret && authHeader === `Bearer ${cronSecret}`
+    const authHeader = req.headers.get('Authorization') ?? ''
+    const provided = authHeader.replace(/^Bearer\s+/i, '')
 
-    if (!isInternalCall && !isCronCall) {
-      // Check if it's a service_role call
-      const supabaseCheck = createClient(
-        Deno.env.get('SUPABASE_URL') ?? '',
-        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-        { global: { headers: { Authorization: authHeader || '' } } }
-      )
-      const { data: { user } } = await supabaseCheck.auth.getUser()
-      if (!user) {
-        throw new Error('Unauthorized — provide CRON_SECRET header or call internally')
-      }
+    if (!provided || !safeEqual(provided, cronSecret)) {
+      throw new Error('Unauthorized — valid CRON_SECRET required')
     }
 
     const supabaseAdmin = createClient(
