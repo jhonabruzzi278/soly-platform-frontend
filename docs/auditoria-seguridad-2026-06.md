@@ -214,6 +214,72 @@ modelo: los tenants nacen `business` y el acceso se controla por suscripción ac
 **Observación (no corregido, requiere decisión):** el tenant `aa` tenía **2
 membresías `owner`** — huella del bug CRIT-1. Es data de prueba; se dejó intacta.
 
+## 6.c. Revisión de login, recuperación de contraseña y Flow (2026-06-12, 2ª pasada)
+
+### Login colgado en producción — causas raíz y corrección
+
+Síntoma: el endpoint de token respondía **200 OK** pero la app quedaba en
+"Cargando..." indefinidamente. Tres causas, todas corregidas en `auth.tsx`:
+
+1. **Deadlock de supabase-js:** el callback de `onAuthStateChange` era `async` y
+   aguardaba `fetchUserSession` (RPC → `getSession()`). supabase-js mantiene su
+   lock interno de auth mientras emite el evento, por lo que aguardar otra
+   llamada de auth dentro del callback se bloquea para siempre. Ahora el
+   callback es síncrono y difiere el trabajo con `setTimeout(0)`;
+   `TOKEN_REFRESHED` se ignora (no cambia la sesión de la app).
+2. **RPC sin timeout:** `fetchUserSession` podía colgar el login ante una red
+   lenta. Ahora corre contra un timeout de 6 s con fallback a metadata del JWT.
+3. **`RequireAuth` sin manejo de error:** si `has_active_subscription` fallaba,
+   `hasSub` quedaba `null` → "Cargando..." infinito. Un error ya no bloquea
+   (RLS sigue siendo la barrera real de escritura).
+
+Además, las variables `VITE_*` de Vercel se agregaron **después** del último
+build de producción; al ser de build-time, el bundle en vivo no las tenía. El
+deploy de esta corrección las incorpora.
+
+### Recuperación de contraseña
+
+- La página `/recuperar-password` existía pero **no había ningún enlace** desde
+  el login → agregado "¿Olvidaste tu contraseña?".
+- Si el enlace del correo aterriza en otra ruta, el hash `type=recovery` ahora
+  se redirige a `/recuperar-password` antes de consumirse.
+- **Pendiente (dashboard):** verificar en Auth → URL Configuration que
+  `https://app.soly.cl/recuperar-password` esté en *Redirect URLs* (si no, el
+  correo redirige a la Site URL).
+
+### Signup
+
+- Eliminado el fallback a `create-organization`: con un email ya registrado,
+  `admin.createUser` siempre falla → el usuario veía "Registration failed" en
+  vez del mensaje correcto. Ahora se muestra el error traducido.
+- Validación de contraseña del frontend alineada con la política de Auth
+  (mínimo 8 caracteres; antes el form validaba 6 y el servidor rechazaba con un
+  error confuso).
+- Metadata muerta (`plan`, `role`) eliminada del signUp (el trigger endurecido
+  la ignora).
+
+### Estado de la integración Flow.cl (revisión)
+
+**La integración actual es un esqueleto: no funciona contra la API real de
+Flow.cl.** Hallazgos:
+
+- `flow-create-subscription` y `flow-cancel-subscription` llaman a
+  `https://api.flow.cl/api/v2/subscriptions` con `Authorization: Bearer` — ese
+  endpoint **no existe**. La API real es `https://www.flow.cl/api` con firma
+  HMAC-SHA256 (`s`) sobre los parámetros ordenados, y suscribir requiere crear
+  primero plan (`/plans/create`) y cliente (`/customer/create`), luego
+  `/subscription/create`.
+- `flow-webhook` valida un header `X-Flow-Signature` que **Flow no envía**; la
+  confirmación real de Flow es un POST con `token` que se verifica consultando
+  `payment/getStatus`.
+- Sin `FLOW_API_KEY`/`FLOW_SECRET_KEY` configurados, la función responde
+  "Flow.cl not configured" (HTTP 400) y el botón "Suscribirse" muestra error.
+
+**Mitigación vigente:** todo signup recibe trial de 14 días (migración 0023) y
+el acceso se gatea por `has_active_subscription`, así que la app es usable sin
+Flow. Para cobrar de verdad hay que reescribir las 3 funciones contra la API
+real de Flow con credenciales de comercio (sandbox.flow.cl para pruebas).
+
 ## 7. Mapa de migraciones aplicadas
 
 | Migración | Contenido |
