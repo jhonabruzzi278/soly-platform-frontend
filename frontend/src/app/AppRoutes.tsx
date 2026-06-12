@@ -48,6 +48,14 @@ function TenantLayout() {
 }
 
 export const AppRoutes = () => {
+  // Si el enlace del correo de recuperación aterriza en otra ruta (p. ej. la
+  // Site URL), llevamos el hash de recovery a la página correcta antes de que
+  // se consuma.
+  const hash = typeof window !== "undefined" ? window.location.hash : "";
+  if (hash.includes("type=recovery") && !window.location.pathname.startsWith("/recuperar-password")) {
+    return <Navigate to={{ pathname: "/recuperar-password", hash }} replace />;
+  }
+
   return (
     <ErrorBoundary>
     <Routes>

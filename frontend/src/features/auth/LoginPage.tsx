@@ -1,5 +1,5 @@
 ﻿import { FormEvent, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../app/auth";
 import { FormInput } from "../../components/common/FormInput";
 import { MaterialIcon } from "../../components/common/MaterialIcon";
@@ -31,11 +31,10 @@ export const LoginPage = () => {
 
   const passwordStrength = (p: string): { label: string; color: string; width: string } => {
     if (!p) return { label: "", color: "", width: "0%" };
-    if (p.length < 4) return { label: "Debil", color: "var(--destructive)", width: "25%" };
-    if (p.length < 6) return { label: "Regular", color: "#f59e0b", width: "50%" };
+    if (p.length < 6) return { label: "Débil", color: "var(--destructive)", width: "25%" };
+    if (p.length < 8) return { label: "Regular", color: "#f59e0b", width: "50%" };
     if (/[a-z]/.test(p) && /[A-Z]/.test(p) && /[0-9]/.test(p)) return { label: "Fuerte", color: "var(--success)", width: "100%" };
-    if (p.length >= 6) return { label: "Buena", color: "var(--primary)", width: "75%" };
-    return { label: "Debil", color: "var(--destructive)", width: "25%" };
+    return { label: "Buena", color: "var(--primary)", width: "75%" };
   };
 
   const handleLogin = async (event: FormEvent) => {
@@ -60,9 +59,9 @@ export const LoginPage = () => {
     if (!sBusiness.trim()) fieldErrors.push("Nombre del negocio requerido.");
     if (!sEmail.trim()) fieldErrors.push("Email requerido.");
     if (!isValidEmail(sEmail)) fieldErrors.push("Email no valido.");
-    if (!sPassword) fieldErrors.push("Contrasena requerida.");
-    if (sPassword.length < 6) fieldErrors.push("Minimo 6 caracteres.");
-    if (sPassword !== sConfirm) fieldErrors.push("Las contrasenas no coinciden.");
+    if (!sPassword) fieldErrors.push("Contraseña requerida.");
+    if (sPassword.length < 8) fieldErrors.push("La contraseña debe tener al menos 8 caracteres.");
+    if (sPassword !== sConfirm) fieldErrors.push("Las contraseñas no coinciden.");
     if (fieldErrors.length > 0) { setError(fieldErrors[0]); return; }
 
     setLoading(true); setError(null);
@@ -103,7 +102,12 @@ export const LoginPage = () => {
             {tab === "login" ? (
               <form onSubmit={handleLogin} className="space-y-4">
                 <FormInput label="Email" type="email" value={email} onChange={setEmail} required />
-                <FormInput label="Contrasena" type="password" value={password} onChange={setPassword} required />
+                <FormInput label="Contraseña" type="password" value={password} onChange={setPassword} required />
+                <div className="text-right">
+                  <Link to="/recuperar-password" className="text-xs text-[var(--primary)] underline underline-offset-4">
+                    ¿Olvidaste tu contraseña?
+                  </Link>
+                </div>
                 {error ? <div role="alert" className="rounded-lg bg-[var(--destructive)]/10 px-3 py-2 text-sm text-[var(--destructive)]">{error}</div> : null}
                 <Button type="submit" disabled={loading} className="h-11 w-full rounded-lg">
                   {loading ? "Ingresando..." : "Entrar"}
@@ -114,7 +118,7 @@ export const LoginPage = () => {
                 <FormInput label="Tu nombre" value={sName} onChange={setSName} placeholder="Como te llamas" required />
                 <FormInput label="Nombre del negocio" value={sBusiness} onChange={setSBusiness} placeholder="Mi Negocio" required />
                 <FormInput label="Email" type="email" value={sEmail} onChange={setSEmail} placeholder="tu@email.com" required />
-                <FormInput label="Contrasena" type="password" value={sPassword} onChange={setSPassword} placeholder="Minimo 6 caracteres" required />
+                <FormInput label="Contraseña" type="password" value={sPassword} onChange={setSPassword} placeholder="Mínimo 8 caracteres" required />
                 {sPassword ? (
                   <div className="space-y-1">
                     <div className="h-1.5 w-full rounded-full bg-[var(--muted)]">
@@ -123,7 +127,7 @@ export const LoginPage = () => {
                     <p className="text-xs" style={{ color: strength.color }}>{strength.label}</p>
                   </div>
                 ) : null}
-                <FormInput label="Confirmar contrasena" type="password" value={sConfirm} onChange={setSConfirm} placeholder="Repite la contrasena" required />
+                <FormInput label="Confirmar contraseña" type="password" value={sConfirm} onChange={setSConfirm} placeholder="Repite la contraseña" required />
                 {error ? <div role="alert" className="rounded-lg bg-[var(--destructive)]/10 px-3 py-2 text-sm text-[var(--destructive)]">{error}</div> : null}
                 {success ? <div role="alert" className="rounded-lg bg-[var(--success)]/10 px-3 py-2 text-sm text-[var(--success)]">{success}</div> : null}
                 <Button type="submit" disabled={loading} className="h-11 w-full rounded-lg">

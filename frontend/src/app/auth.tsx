@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type PropsWithChildren } from "react";
 import { Navigate, Outlet, useLocation } from "react-router-dom";
-import { supabase, supabaseUrl, supabaseAnonKey } from "../lib/supabase";
+import { supabase } from "../lib/supabase";
 import { fetchUserSession, type UserSession } from "../lib/api";
 import type { User } from "@supabase/supabase-js";
 
@@ -33,9 +33,11 @@ function translateAuthError(message: string): string {
   if (lower.includes("user already registered") || lower.includes("already been registered"))
     return "Este correo ya esta registrado. Inicia sesion.";
   if (lower.includes("invalid login credentials"))
-    return "Email o contrasena incorrectos.";
-  if (lower.includes("password") && (lower.includes("weak") || lower.includes("short")))
-    return "La contrasena es muy debil. Minimo 6 caracteres.";
+    return "Email o contraseña incorrectos.";
+  if (lower.includes("email not confirmed"))
+    return "Debes confirmar tu correo antes de iniciar sesión. Revisa tu bandeja (y spam).";
+  if (lower.includes("password") && (lower.includes("weak") || lower.includes("short") || lower.includes("at least")))
+    return "La contraseña es muy débil. Mínimo 8 caracteres.";
   if (lower.includes("email") && (lower.includes("invalid")))
     return "El formato del correo electronico no es valido.";
   if (lower.includes("rate limit") || lower.includes("too many requests"))
@@ -84,7 +86,11 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const loadSessionFromDb = async (user: User | null): Promise<Session | null> => {
     if (!user) return null;
     try {
-      const dbSession = await fetchUserSession();
+      // La RPC no puede colgar el login: si tarda más de 6s caemos a metadata.
+      const dbSession = await Promise.race([
+        fetchUserSession(),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("session timeout")), 6000))
+      ]);
       if (dbSession) {
         return buildSessionFromDb(dbSession);
       }
@@ -95,27 +101,34 @@ export function AuthProvider({ children }: PropsWithChildren) {
   };
 
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session: sbSession } }) => {
-      if (sbSession?.user) {
-        const s = await loadSessionFromDb(sbSession.user);
-        setSession(s);
+    let active = true;
+
+    const applyUser = async (user: User | null) => {
+      if (!user) {
+        if (active) { setSession(null); setLoading(false); }
+        return;
       }
-      setLoading(false);
+      const s = await loadSessionFromDb(user);
+      if (active) { setSession(s); setLoading(false); }
+    };
+
+    supabase.auth.getSession().then(({ data: { session: sbSession } }) => {
+      void applyUser(sbSession?.user ?? null);
     }).catch(() => {
-      setLoading(false);
+      if (active) setLoading(false);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, sbSession) => {
-      if (sbSession?.user) {
-        const s = await loadSessionFromDb(sbSession.user);
-        setSession(s);
-      } else {
-        setSession(null);
-      }
-      setLoading(false);
+    // El callback debe ser síncrono: awaitear llamadas de Supabase aquí dentro
+    // deadlockea el lock interno de auth (login colgado en "Cargando...").
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, sbSession) => {
+      if (event === "TOKEN_REFRESHED") return; // la sesión de app no cambia
+      setTimeout(() => {
+        if (active) void applyUser(sbSession?.user ?? null);
+      }, 0);
     });
 
     return () => {
+      active = false;
       subscription.unsubscribe();
       if (refreshTimerRef.current) clearInterval(refreshTimerRef.current);
     };
@@ -154,20 +167,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
       const { error: signUpErr } = await supabase.auth.signUp({
         email: normalizedEmail, password,
-        options: { data: { name, tenant_name: businessName, tenant_id: slug, plan: "starter", role: "owner" } }
+        options: { data: { name, tenant_name: businessName, tenant_id: slug } }
       });
 
-      if (signUpErr && signUpErr.message.includes("already")) {
-        const resp = await fetch(`${supabaseUrl}/functions/v1/create-organization`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", apikey: supabaseAnonKey },
-          body: JSON.stringify({ email: normalizedEmail, password, business_name: businessName, slug, plan: "starter" })
-        });
-        if (!resp.ok) {
-          const { error: apiErr } = await resp.json();
-          throw new Error(apiErr || "Error al crear tu espacio");
-        }
-      } else if (signUpErr) {
+      if (signUpErr) {
         throw new Error(translateAuthError(signUpErr.message));
       }
 
@@ -213,7 +216,11 @@ export function RequireAuth() {
     }
     let cancelled = false;
     supabase.rpc("has_active_subscription", { p_user_id: session.userId, p_product: "soly" })
-      .then(({ data }) => { if (!cancelled) setHasSub(!!data); });
+      .then(({ data, error }) => {
+        // Un error de red no debe dejar la app colgada en "Cargando...";
+        // RLS en la base de datos sigue siendo la barrera real de escritura.
+        if (!cancelled) setHasSub(error ? true : !!data);
+      });
     return () => { cancelled = true; };
   }, [session?.userId, location.pathname]);
 
