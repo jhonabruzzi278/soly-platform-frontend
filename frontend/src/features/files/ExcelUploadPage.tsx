@@ -18,11 +18,6 @@ type ImportResult = {
   mapping: Record<string, string>;
 };
 
-type PreviewData = {
-  headers: string[];
-  rows: Record<string, string>[];
-};
-
 export const ExcelUploadPage = () => {
   const { tenant } = useTenant();
   const queryClient = useQueryClient();
@@ -35,7 +30,6 @@ export const ExcelUploadPage = () => {
   const [importFile, setImportFile] = useState<string>("");
   const [importModal, setImportModal] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
-  const [preview, setPreview] = useState<PreviewData | null>(null);
 
   const files = useQuery({
     queryKey: ["storage-files", tenant?.id],
@@ -83,25 +77,8 @@ export const ExcelUploadPage = () => {
   const openImport = (fileName: string) => {
     setImportFile(fileName);
     setImportTable("customers");
-    setPreview(null);
     setResult(null);
     setImportModal(true);
-  };
-
-  const loadPreview = async () => {
-    if (!tenant || !importFile) return;
-    setImporting(true);
-    setError(null);
-    try {
-      const data = await importDataFromExcel(tenant.id, importFile, importTable);
-      setResult(data);
-      setPreview({ headers: data.headers, rows: [] });
-      setMessage(`Vista previa: ${data.headers.length} columnas detectadas. Listo para importar.`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "No se pudo previsualizar.");
-    } finally {
-      setImporting(false);
-    }
   };
 
   const doImport = async () => {
@@ -110,7 +87,8 @@ export const ExcelUploadPage = () => {
     setError(null);
     setMessage(null);
     try {
-      const data = await importDataFromExcel(tenant.id, importFile, importTable);
+      // La Edge Function exige la ruta completa con prefijo del tenant.
+      const data = await importDataFromExcel(tenant.id, `${tenant.id}/${importFile}`, importTable);
       setResult(data);
       setMessage(`Importado: ${data.imported} de ${data.total} registros en "${importTable}".`);
       if (data.errors.length > 0) {
@@ -231,22 +209,26 @@ export const ExcelUploadPage = () => {
 
       <div className="rounded-2xl border border-transparent bg-[var(--card)] p-4 shadow-[var(--neu-shadow-raised)]">
         <p className="mb-3 text-xs font-semibold uppercase tracking-[0.15em] text-[var(--muted-foreground)]">Formato esperado por tabla</p>
+        <p className="mb-3 text-xs text-[var(--muted-foreground)]">
+          La importación procesa archivos <strong>CSV separados por comas</strong> con la primera fila de
+          encabezados usando exactamente estos nombres de columna:
+        </p>
         <div className="grid gap-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
           <div>
             <p className="font-semibold">Clientes</p>
-            <p className="text-[var(--muted-foreground)]">nombre, email, telefono, empresa, notas</p>
+            <p className="text-[var(--muted-foreground)]">name, email, phone, company, notes</p>
           </div>
           <div>
             <p className="font-semibold">Citas</p>
-            <p className="text-[var(--muted-foreground)]">cliente, fecha, hora, servicio, costo, estado</p>
+            <p className="text-[var(--muted-foreground)]">appointment_date, appointment_time, service_name, cost, status, staff_name</p>
           </div>
           <div>
             <p className="font-semibold">Servicios</p>
-            <p className="text-[var(--muted-foreground)]">nombre, precio</p>
+            <p className="text-[var(--muted-foreground)]">name, price</p>
           </div>
           <div>
             <p className="font-semibold">Inventario</p>
-            <p className="text-[var(--muted-foreground)]">nombre, proveedor, costo, precio_venta, stock</p>
+            <p className="text-[var(--muted-foreground)]">name, supplier, cost, sale_price, stock</p>
           </div>
         </div>
       </div>
@@ -276,7 +258,7 @@ export const ExcelUploadPage = () => {
               <option value="customers">Clientes</option>
               <option value="appointments">Citas</option>
               <option value="services">Servicios</option>
-              <option value="inventory">Inventario</option>
+              <option value="inventory_products">Inventario</option>
             </select>
           </div>
 
@@ -287,7 +269,7 @@ export const ExcelUploadPage = () => {
           {result ? (
             <div className="rounded-xl bg-[var(--muted)]/30 p-3 text-sm">
               <p>{result.headers.length} columnas detectadas: {result.headers.join(", ")}</p>
-              {preview && result.imported !== undefined ? (
+              {result.imported !== undefined ? (
                 <p className="mt-1 font-semibold text-[var(--success)]">{result.imported} de {result.total} registros importados</p>
               ) : null}
             </div>
@@ -295,9 +277,6 @@ export const ExcelUploadPage = () => {
 
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => setImportModal(false)}>Cancelar</Button>
-            <Button variant="outline" onClick={() => void loadPreview()} disabled={importing}>
-              {importing ? "Cargando..." : "Previsualizar"}
-            </Button>
             <Button onClick={() => void doImport()} disabled={importing}>
               {importing ? "Importando..." : "Importar"}
             </Button>
