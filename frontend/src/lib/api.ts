@@ -3,6 +3,11 @@ import { StorageFile, Tenant, Membership, InviteMemberPayload, DashboardKpi, Cus
 
 const BUCKET_NAME = import.meta.env.VITE_SUPABASE_BUCKET ?? "excel-files";
 
+// Signed URL lifetime for tenant files. The bucket is PRIVATE — access is
+// granted only through short-lived signed URLs scoped to the requesting user
+// (storage RLS still enforces tenant isolation on the underlying object).
+const SIGNED_URL_TTL_SECONDS = 60 * 10;
+
 const tenantPath = (tenantId: string, filename: string) => `${tenantId}/${filename}`;
 
 export const uploadExcelFile = async (tenantId: string, file: File): Promise<StorageFile> => {
@@ -13,14 +18,16 @@ export const uploadExcelFile = async (tenantId: string, file: File): Promise<Sto
 
   if (error) throw error;
 
-  const { data: urlData } = supabase.storage.from(BUCKET_NAME).getPublicUrl(data.path);
+  const { data: urlData } = await supabase.storage
+    .from(BUCKET_NAME)
+    .createSignedUrl(data.path, SIGNED_URL_TTL_SECONDS);
 
   return {
     name: file.name,
     id: data.id ?? data.path,
     created_at: new Date().toISOString(),
     size: file.size,
-    url: urlData.publicUrl
+    url: urlData?.signedUrl ?? ""
   };
 };
 
@@ -31,20 +38,28 @@ export const listExcelFiles = async (tenantId: string): Promise<StorageFile[]> =
 
   if (error) throw error;
 
-  return (data ?? [])
-    .filter((item) => item.name.endsWith(".xlsx") || item.name.endsWith(".xls") || item.name.endsWith(".csv"))
-    .map((item) => {
-      const filePath = tenantPath(tenantId, item.name);
-      const { data: urlData } = supabase.storage.from(BUCKET_NAME).getPublicUrl(filePath);
+  const items = (data ?? []).filter(
+    (item) => item.name.endsWith(".xlsx") || item.name.endsWith(".xls") || item.name.endsWith(".csv")
+  );
 
-      return {
-        name: item.name,
-        id: item.id ?? item.name,
-        created_at: item.created_at ?? new Date().toISOString(),
-        size: item.metadata?.size ?? 0,
-        url: urlData.publicUrl
-      };
-    });
+  if (items.length === 0) return [];
+
+  const paths = items.map((item) => tenantPath(tenantId, item.name));
+  const { data: signed, error: signError } = await supabase.storage
+    .from(BUCKET_NAME)
+    .createSignedUrls(paths, SIGNED_URL_TTL_SECONDS);
+
+  if (signError) throw signError;
+
+  const urlByPath = new Map((signed ?? []).map((s) => [s.path ?? "", s.signedUrl ?? ""]));
+
+  return items.map((item, i) => ({
+    name: item.name,
+    id: item.id ?? item.name,
+    created_at: item.created_at ?? new Date().toISOString(),
+    size: item.metadata?.size ?? 0,
+    url: urlByPath.get(paths[i]) ?? ""
+  }));
 };
 
 export const deleteExcelFile = async (tenantId: string, fileName: string) => {
@@ -93,7 +108,15 @@ export const fetchTenantMembers = async (tenantId: string): Promise<Membership[]
     .order("created_at", { ascending: true });
 
   if (error) throw error;
-  return (data ?? []).map((row: any) => ({
+  type MembershipRow = {
+    tenant_id: string;
+    user_id: string;
+    role: string;
+    created_at: string;
+    tenants: Tenant | null;
+    profiles: { email: string | null; full_name: string | null } | null;
+  };
+  return ((data ?? []) as MembershipRow[]).map((row) => ({
     tenant_id: row.tenant_id,
     user_id: row.user_id,
     role: row.role,
@@ -203,7 +226,7 @@ export const createTenant = async (payload: {
 
   if (!response.ok) {
     const msg = typeof parsed === "object" && parsed !== null && "error" in parsed
-      ? (parsed as any).error
+      ? String((parsed as Record<string, unknown>).error)
       : `Error (${response.status})`;
     throw new Error(msg);
   }

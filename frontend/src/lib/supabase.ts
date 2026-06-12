@@ -18,6 +18,22 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 const isJwtLike = (token: string | null | undefined): token is string =>
   Boolean(token && token.split(".").length === 3);
 
+const getStringField = (obj: unknown, key: string): string | null => {
+  if (typeof obj === "object" && obj !== null && key in obj) {
+    const value = (obj as Record<string, unknown>)[key];
+    return typeof value === "string" ? value : null;
+  }
+  return null;
+};
+
+const getArrayField = (obj: unknown, key: string): unknown[] => {
+  if (typeof obj === "object" && obj !== null && key in obj) {
+    const value = (obj as Record<string, unknown>)[key];
+    return Array.isArray(value) ? value : [];
+  }
+  return [];
+};
+
 const toSafeEdgeErrorMessage = (status: number, rawMessage: string) => {
   const normalized = (rawMessage ?? "").trim();
   const lower = normalized.toLowerCase();
@@ -43,19 +59,14 @@ const toSafeEdgeErrorMessage = (status: number, rawMessage: string) => {
 
 const extractApiErrorMessage = (parsed: unknown, fallback: string) => {
   const base =
-    (typeof parsed === "object" && parsed !== null && "error" in parsed && typeof (parsed as any).error === "string"
-      ? (parsed as any).error
-      : null) ??
-    (typeof parsed === "object" && parsed !== null && "message" in parsed && typeof (parsed as any).message === "string"
-      ? (parsed as any).message
-      : null) ??
+    getStringField(parsed, "error") ??
+    getStringField(parsed, "message") ??
     (typeof parsed === "string" ? parsed : null) ??
     fallback;
 
-  const codes =
-    typeof parsed === "object" && parsed !== null && "errorCodes" in parsed && Array.isArray((parsed as any).errorCodes)
-      ? (parsed as any).errorCodes.filter((item: unknown) => typeof item === "string")
-      : [];
+  const codes = getArrayField(parsed, "errorCodes").filter(
+    (item): item is string => typeof item === "string"
+  );
 
   if (codes.length > 0) {
     return `${base} [${codes.join(", ")}]`;
@@ -122,12 +133,8 @@ export const invokeEdgeFunction = async <TBody extends Record<string, unknown>, 
   let { response, parsed } = await call(accessToken);
 
   const errorMessage =
-    (typeof parsed === "object" && parsed !== null && "error" in parsed && typeof (parsed as any).error === "string"
-      ? (parsed as any).error
-      : null) ??
-    (typeof parsed === "object" && parsed !== null && "message" in parsed && typeof (parsed as any).message === "string"
-      ? (parsed as any).message
-      : null) ??
+    getStringField(parsed, "error") ??
+    getStringField(parsed, "message") ??
     (typeof parsed === "string" ? parsed : null) ??
     "";
 

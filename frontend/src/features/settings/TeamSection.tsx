@@ -1,9 +1,8 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { useTenant } from "../../hooks/useTenant";
 import { fetchTenantMembers, inviteMember, removeMember, countTenantSeats } from "../../lib/api";
 import { Membership, MemberRole } from "../../lib/types";
-import { PlanKey, PLAN_LIMITS, PLAN_META } from "../../lib/features";
+import { PLAN_LIMITS, PLAN_META } from "../../lib/features";
 import { FormInput } from "../../components/common/FormInput";
 import { MaterialIcon } from "../../components/common/MaterialIcon";
 import { SurfaceMessage } from "../../components/common/SurfaceMessage";
@@ -16,7 +15,6 @@ type Props = {
 
 export const TeamSection = ({ onFeedback }: Props) => {
   const { tenant } = useTenant();
-  const navigate = useNavigate();
   const [members, setMembers] = useState<Membership[]>([]);
   const [seatsCount, setSeatsCount] = useState(0);
   const [inviteEmail, setInviteEmail] = useState("");
@@ -24,9 +22,8 @@ export const TeamSection = ({ onFeedback }: Props) => {
   const [inviting, setInviting] = useState(false);
   const [membersLoaded, setMembersLoaded] = useState(false);
 
-  const plan = (tenant?.plan ?? "starter") as PlanKey;
-  const planMeta = PLAN_META[plan];
-  const seatLimit = PLAN_LIMITS[plan].seats;
+  const planMeta = PLAN_META.business;
+  const seatLimit = PLAN_LIMITS.business.seats;
 
   const loadMembers = async () => {
     if (!tenant) return;
@@ -123,17 +120,11 @@ export const TeamSection = ({ onFeedback }: Props) => {
           </div>
         )}
 
-        {seatsCount >= seatLimit && seatLimit !== Infinity ? (
+        {seatsCount >= seatLimit ? (
           <SurfaceMessage
             tone="default"
             title="Limite de seats alcanzado"
-            description={`Tu plan ${planMeta.label} permite hasta ${seatLimit} usuarios. Haz upgrade para agregar mas.`}
-            action={
-              <Button size="sm" onClick={() => navigate("/billing")}>
-                <MaterialIcon name="workspace_premium" size={16} />
-                Upgrade
-              </Button>
-            }
+            description={`Tu plan permite hasta ${seatLimit} usuarios. Contacta soporte para mas.`}
           />
         ) : (
           <div className="flex gap-2">

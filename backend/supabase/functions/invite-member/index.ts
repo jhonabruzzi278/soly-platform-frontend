@@ -96,15 +96,33 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    // Always invite by email — the auth trigger will auto-create membership
-    // when the user accepts the invitation and creates their account.
-    // This avoids paginating all users (which was a critical performance issue).
+    // Generate a single-use invitation token (server-side source of truth).
+    // The auth trigger validates this token against public.invitations on
+    // signup — it never trusts the role/tenant from client-supplied metadata.
+    const tokenBytes = new Uint8Array(32)
+    crypto.getRandomValues(tokenBytes)
+    const inviteToken = Array.from(tokenBytes, (b) => b.toString(16).padStart(2, '0')).join('')
+
+    const { error: invitationError } = await supabaseAdmin.from('invitations').insert({
+      tenant_id,
+      email: email.trim().toLowerCase(),
+      role,
+      token: inviteToken,
+      invited_by: user.id
+    })
+
+    if (invitationError) {
+      throw invitationError
+    }
+
+    // Always invite by email — the auth trigger will create the membership
+    // (using the role from the invitations row) when the user accepts and
+    // signs up. This avoids paginating all users.
     const { error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
       data: {
         tenant_id,
         tenant_name: tenant.slug ?? tenant_id,
-        role,
-        invited_by: user.id
+        invite_token: inviteToken
       }
     })
 

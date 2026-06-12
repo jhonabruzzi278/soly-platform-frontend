@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState, type P
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { supabase, supabaseUrl, supabaseAnonKey } from "../lib/supabase";
 import { fetchUserSession, type UserSession } from "../lib/api";
-import type { Session as SupabaseSession, User } from "@supabase/supabase-js";
+import type { User } from "@supabase/supabase-js";
 
 type SolyRole = "owner" | "admin" | "member";
 

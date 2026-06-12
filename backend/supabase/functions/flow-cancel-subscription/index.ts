@@ -55,20 +55,26 @@ Deno.serve(async (req) => {
 
     // Cancel in Flow.cl FIRST — only update local DB if provider succeeds
     if (subscription.provider_subscription_id) {
-      const flowResponse = await fetch(
-        `https://api.flow.cl/api/v2/subscriptions/${subscription.provider_subscription_id}/cancel`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${flowApiKey}`,
-            'Content-Type': 'application/json'
-          }
+    const flowResponse = await fetch(
+      `https://api.flow.cl/api/v2/subscriptions/${subscription.provider_subscription_id}/cancel`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${flowApiKey}`,
+          'Content-Type': 'application/json'
         }
-      )
-
-      if (!flowResponse.ok) {
-        throw new Error('Failed to cancel subscription with payment provider. Please try again.')
       }
+    ).catch((fetchError) => {
+      // Manejar errores de red/DNS específicamente
+      if (fetchError.message.includes('dns') || fetchError.message.includes('network') || fetchError.message.includes('fetch')) {
+        throw new Error('Payment service temporarily unavailable. Please try again in a few minutes.')
+      }
+      throw fetchError
+    })
+
+    if (!flowResponse.ok) {
+      throw new Error('Failed to cancel subscription with payment provider. Please try again.')
+    }
     }
 
     const supabaseAdmin = createClient(

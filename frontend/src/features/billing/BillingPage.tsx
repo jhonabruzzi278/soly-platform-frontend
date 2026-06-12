@@ -1,21 +1,24 @@
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useAuth } from "../../app/auth";
-import { useTenant } from "../../hooks/useTenant";
 import { createFlowSubscription, cancelFlowSubscription, fetchUserSubscription } from "../../lib/api";
-import { PlanKey, PLAN_META, PLAN_LIMITS } from "../../lib/features";
+import { PLAN_META, PLAN_LIMITS } from "../../lib/features";
 import { Subscription } from "../../lib/types";
 import { SurfaceMessage } from "../../components/common/SurfaceMessage";
 import { MaterialIcon } from "../../components/common/MaterialIcon";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
 
-const PLAN_FEATURES: Record<PlanKey, string[]> = {
-  starter: ["1 usuario", "Hasta 100 archivos", "Dashboard basico"],
-  pro: ["5 usuarios", "Hasta 1,000 archivos", "Dashboard + Reportes", "KPIs avanzados"],
-  business: ["20 usuarios", "Hasta 10,000 archivos", "Todo de Pro", "Clientes y citas", "Inventario"],
-  enterprise: ["Usuarios ilimitados", "Archivos ilimitados", "Todo de Business", "SSO y SLA", "Acceso a API"]
-};
+const PLAN_FEATURES = [
+  "Hasta 20 usuarios",
+  "Hasta 10.000 archivos",
+  "Gestión de clientes",
+  "Citas y agenda",
+  "Reportes y KPIs",
+  "Inventario",
+  "Dashboard avanzado",
+  "Soporte prioritario"
+];
 
 const STATUS_LABELS: Record<string, { label: string; tone: "default" | "success" | "warning" | "danger" }> = {
   active: { label: "Activa", tone: "success" },
@@ -26,7 +29,6 @@ const STATUS_LABELS: Record<string, { label: string; tone: "default" | "success"
 
 export const BillingPage = () => {
   const { session } = useAuth();
-  const { tenant } = useTenant();
   const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState<string | null>(null);
   const [message, setMessage] = useState<{ tone: "default" | "danger"; title: string; description: string } | null>(null);
@@ -57,16 +59,11 @@ export const BillingPage = () => {
     }
   }, [searchParams]);
 
-  const handleUpgrade = async (planKey: string) => {
-    if (planKey === "starter") return;
-    if (planKey === "enterprise") {
-      setMessage({ tone: "default", title: "Contactar ventas", description: "Envia un email a ventas@soly.cl para el plan Enterprise." });
-      return;
-    }
-    setLoading(planKey);
+  const handleSubscribe = async () => {
+    setLoading("subscribe");
     setMessage(null);
     try {
-      const { url } = await createFlowSubscription(planKey);
+      const { url } = await createFlowSubscription("business");
       window.location.href = url;
     } catch (err) {
       setMessage({ tone: "danger", title: "Error", description: err instanceof Error ? err.message : "No se pudo iniciar el pago." });
@@ -81,7 +78,7 @@ export const BillingPage = () => {
     setLoading("cancel");
     try {
       await cancelFlowSubscription(subscription.id);
-      setMessage({ tone: "default", title: "Cancelada", description: "Volveras a Starter al final del periodo." });
+      setMessage({ tone: "default", title: "Cancelada", description: "Tu cuenta quedara inactiva al final del periodo." });
       await loadSubscription();
     } catch (err) {
       setMessage({ tone: "danger", title: "Error", description: err instanceof Error ? err.message : "No se pudo cancelar." });
@@ -90,9 +87,10 @@ export const BillingPage = () => {
     }
   };
 
-  const currentPlan = (subscription?.plan ?? tenant?.plan ?? "starter") as PlanKey;
-  const currentPlanMeta = PLAN_META[currentPlan];
+  const planMeta = PLAN_META.business;
+  const limits = PLAN_LIMITS.business;
   const statusInfo = subscription?.status ? STATUS_LABELS[subscription.status] : null;
+  const isActive = subscription?.status === "active" || subscription?.status === "trialing";
 
   const getTrialDaysLeft = () => {
     if (!subscription?.trial_ends_at) return null;
@@ -119,7 +117,7 @@ export const BillingPage = () => {
           <CardHeader>
             <CardTitle>Tu suscripcion</CardTitle>
             <CardDescription>
-              Plan: <strong>{currentPlanMeta.label}</strong> ({currentPlanMeta.priceLabel})
+              Plan: <strong>{planMeta.label}</strong> ({planMeta.priceLabel})
               {statusInfo && (
                 <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-[var(--muted)] px-2 py-0.5 text-xs font-medium">
                   {statusInfo.label}
@@ -139,7 +137,7 @@ export const BillingPage = () => {
                 Proximo cobro: {new Date(subscription.current_period_end).toLocaleDateString("es-CL")}
               </p>
             )}
-            {currentPlan !== "starter" && subscription.status !== "cancelled" && (
+            {subscription.status !== "cancelled" && (
               <Button variant="outline" onClick={() => void handleCancel()} disabled={loading === "cancel"}>
                 <MaterialIcon name="cancel" size={18} />
                 {loading === "cancel" ? "Cancelando..." : "Cancelar suscripcion"}
@@ -149,76 +147,50 @@ export const BillingPage = () => {
         </Card>
       ) : null}
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {(["starter", "pro", "business", "enterprise"] as const).map((planKey) => {
-          const meta = PLAN_META[planKey];
-          const features = PLAN_FEATURES[planKey];
-          const limits = PLAN_LIMITS[planKey];
-          const isCurrent = currentPlan === planKey;
-          const isPopular = planKey === "business";
-
-          return (
-            <Card
-              key={planKey}
-              className={`relative rounded-xl border transition-all ${
-                isCurrent
-                  ? "border-[var(--primary)] bg-[var(--primary)]/5 shadow-[var(--neu-shadow-raised)]"
-                  : isPopular
-                  ? "border-[var(--primary)]/50 shadow-[var(--neu-shadow-raised)]"
-                  : "border-transparent shadow-[var(--neu-shadow-raised)]"
-              }`}
+      {!isActive && (
+        <Card className="relative rounded-xl border border-[var(--primary)]/50 shadow-[var(--neu-shadow-raised)]">
+          <div className="absolute -top-2 left-1/2 -translate-x-1/2 rounded-full bg-[var(--primary)] px-3 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
+            Plan unico
+          </div>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-xl">{planMeta.label}</CardTitle>
+            </div>
+            <p className="mt-1 text-3xl font-bold">{planMeta.priceLabel}</p>
+            <CardDescription className="mt-2 text-sm">{planMeta.description}</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <ul className="space-y-2 text-sm">
+              {PLAN_FEATURES.map((feature, i) => (
+                <li key={i} className="flex items-start gap-2">
+                  <MaterialIcon name="check_circle" size={14} className="mt-0.5 text-[var(--primary)]" />
+                  <span>{feature}</span>
+                </li>
+              ))}
+              <li className="flex items-start gap-2">
+                <MaterialIcon name="group" size={14} className="mt-0.5 text-[var(--muted-foreground)]" />
+                <span className="text-[var(--muted-foreground)]">
+                  Hasta {limits.seats} usuarios
+                </span>
+              </li>
+              <li className="flex items-start gap-2">
+                <MaterialIcon name="folder" size={14} className="mt-0.5 text-[var(--muted-foreground)]" />
+                <span className="text-[var(--muted-foreground)]">
+                  Hasta {limits.files.toLocaleString()} archivos
+                </span>
+              </li>
+            </ul>
+            <Button
+              onClick={() => void handleSubscribe()}
+              disabled={loading !== null}
+              variant="default"
+              className="w-full"
             >
-              {isPopular && !isCurrent && (
-                <div className="absolute -top-2 left-1/2 -translate-x-1/2 rounded-full bg-[var(--primary)] px-3 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
-                  Popular
-                </div>
-              )}
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg">{meta.label}</CardTitle>
-                  {isCurrent && (
-                    <span className="rounded-full border border-[var(--primary)] bg-[var(--primary)]/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[var(--primary)]">
-                      Actual
-                    </span>
-                  )}
-                </div>
-                <p className="mt-1 text-2xl font-bold">{meta.priceLabel}</p>
-                <CardDescription className="mt-2 text-sm">{meta.description}</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <ul className="space-y-2 text-sm">
-                  {features.map((feature, i) => (
-                    <li key={i} className="flex items-start gap-2">
-                      <MaterialIcon name="check_circle" size={14} className="mt-0.5 text-[var(--primary)]" />
-                      <span>{feature}</span>
-                    </li>
-                  ))}
-                  <li className="flex items-start gap-2">
-                    <MaterialIcon name="group" size={14} className="mt-0.5 text-[var(--muted-foreground)]" />
-                    <span className="text-[var(--muted-foreground)]">
-                      {limits.seats === Infinity ? "Usuarios ilimitados" : `Hasta ${limits.seats} ${limits.seats === 1 ? "usuario" : "usuarios"}`}
-                    </span>
-                  </li>
-                </ul>
-                <Button
-                  onClick={() => void handleUpgrade(planKey)}
-                  disabled={isCurrent || loading !== null}
-                  variant={isCurrent ? "outline" : isPopular ? "default" : "ghost"}
-                  className="w-full"
-                >
-                  {isCurrent
-                    ? "Plan actual"
-                    : planKey === "starter"
-                    ? "Comenzar gratis"
-                    : planKey === "enterprise"
-                    ? "Contactar ventas"
-                    : "Suscribirse"}
-                </Button>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
+              {loading === "subscribe" ? "Procesando..." : "Suscribirse"}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="rounded-xl border border-transparent shadow-[var(--neu-shadow-raised)]">
         <CardHeader>
