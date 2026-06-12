@@ -91,6 +91,10 @@ Deno.serve(async (req) => {
 
     const flowData = await flowResponse.json()
 
+    if (!flowData.subscription_id || !flowData.payment_url) {
+      throw new Error('Invalid response from payment provider')
+    }
+
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''

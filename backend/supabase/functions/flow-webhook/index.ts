@@ -2,6 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { createHmac, timingSafeEqual } from 'https://deno.land/std@0.177.0/node/crypto.ts'
 import { getCorsHeaders, handleCorsOptions } from '../_shared/cors.ts'
 import { applyRateLimit } from '../_shared/rate-limit.ts'
+import { stripUndefined } from '../_shared/utils.ts'
 
 Deno.serve(async (req) => {
   const corsResponse = handleCorsOptions(req)
@@ -75,13 +76,13 @@ Deno.serve(async (req) => {
     }
 
     // Insert event record — handle unique constraint violation (idempotency at DB level)
-    const { error: insertError } = await supabaseAdmin.from('billing_webhook_events').insert({
+    const { error: insertError } = await supabaseAdmin.from('billing_webhook_events').insert(stripUndefined({
       provider: 'flow',
       event_type: eventType,
       raw_payload: payload,
       subscription_id: dbSubscription?.id || null,
       processed: false
-    })
+    }))
 
     // If unique constraint violation, this is a duplicate event
     if (insertError && insertError.code === '23505') {

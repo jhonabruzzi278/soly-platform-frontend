@@ -1,6 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { getCorsHeaders, handleCorsOptions } from '../_shared/cors.ts'
 import { applyRateLimit } from '../_shared/rate-limit.ts'
+import { stripUndefined } from '../_shared/utils.ts'
 
 const ALLOWED_INVITE_ROLES = ['member', 'admin'] as const
 
@@ -103,13 +104,13 @@ Deno.serve(async (req) => {
     crypto.getRandomValues(tokenBytes)
     const inviteToken = Array.from(tokenBytes, (b) => b.toString(16).padStart(2, '0')).join('')
 
-    const { error: invitationError } = await supabaseAdmin.from('invitations').insert({
+    const { error: invitationError } = await supabaseAdmin.from('invitations').insert(stripUndefined({
       tenant_id,
       email: email.trim().toLowerCase(),
       role,
       token: inviteToken,
       invited_by: user.id
-    })
+    }))
 
     if (invitationError) {
       throw invitationError
