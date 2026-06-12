@@ -280,6 +280,47 @@ el acceso se gatea por `has_active_subscription`, así que la app es usable sin
 Flow. Para cobrar de verdad hay que reescribir las 3 funciones contra la API
 real de Flow con credenciales de comercio (sandbox.flow.cl para pruebas).
 
+## 6.d. Fase 1 — Importador inteligente agnóstico de IA + métricas (2026-06-12)
+
+**Importador (`import-data` reescrita y desplegada):**
+
+- Parser determinístico **SheetJS**: soporta `.xlsx`, `.xls` y `.csv` reales
+  (con `raw: true` en texto plano para no corromper números chilenos "12.000").
+- **Mapeo heurístico ES/EN** de encabezados (nombre/cliente→name,
+  teléfono/fono/celular→phone, valor/monto→cost, etc.) con normalización de
+  tildes.
+- **IA agnóstica y opcional** por tenant (tabla `ai_settings`): proveedor
+  `anthropic` (Messages API) o `openai` (cualquier endpoint compatible vía
+  `base_url`: OpenAI, OpenRouter, Groq, Gemini…). La IA solo ve encabezados +
+  5 valores de muestra truncados y solo puede responder un JSON validado contra
+  la whitelist de columnas → una inyección de prompt en celdas a lo más propone
+  un mapeo inválido que se rechaza. Timeout 20 s; si falla, sigue la heurística.
+- **`dry_run`**: análisis sin escribir (mapeo, filas válidas, preview, errores);
+  el usuario confirma en la UI y el mapeo confirmado se reutiliza al importar.
+- **Coerción de tipos**: montos CL/US, fechas dd/mm/yyyy y seriales de Excel,
+  horas, estados en español (realizada→completed…), tags.
+- **Citas**: `customer_id` es NOT NULL → la columna "cliente" se resuelve por
+  nombre dentro del tenant y **crea los clientes faltantes** automáticamente.
+- **Dedup de clientes** por email/teléfono/nombre (reimportar no duplica).
+- Límites: 10 MB, 10.000 filas, rate limit 5/min, `tenant_id` forzado server-side.
+- **Verificado en vivo**: CSV con encabezados españoles con tildes → mapeo
+  correcto; citas con "$12.000"/dd-mm-yyyy/"Realizada" → datos correctos;
+  re-import → 2 duplicados omitidos.
+
+**Seguridad de `ai_settings` (migración 0024):** RLS owner/admin-only y
+`api_key` **write-only** vía column grants (el cliente puede escribirla pero
+nunca leerla; solo el service role de la función la lee).
+
+**Bug crítico encontrado y corregido (migración 0025):** borrar un cliente con
+citas fallaba siempre — el CASCADE disparaba el trigger de rollup sobre un
+cliente ya inexistente y `refresh_customer_rollup` lanzaba "Customer not found".
+Ahora retorna silenciosamente. Verificado en vivo.
+
+**Frontend:** modal de importación en 2 pasos (Analizar → vista previa con
+chips de mapeo → Confirmar), banner post-import con enlace **"Ver métricas"**
+al dashboard, y sección **"Asistente de IA"** en Configuración (owner/admin)
+para proveedor/URL base/modelo/API key.
+
 ## 7. Mapa de migraciones aplicadas
 
 | Migración | Contenido |

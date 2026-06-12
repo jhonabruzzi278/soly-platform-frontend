@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTenant } from "../../hooks/useTenant";
 import { DataTable } from "../../components/common/DataTable";
@@ -6,16 +7,53 @@ import { MaterialIcon } from "../../components/common/MaterialIcon";
 import { Modal } from "../../components/common/Modal";
 import { SurfaceMessage } from "../../components/common/SurfaceMessage";
 import { Button } from "../../components/ui/button";
-import { deleteExcelFile, listExcelFiles, uploadExcelFile, importDataFromExcel } from "../../lib/api";
+import {
+  deleteExcelFile,
+  listExcelFiles,
+  uploadExcelFile,
+  analyzeImportFile,
+  importDataFromExcel,
+  type ImportAnalysis,
+  type ImportResult
+} from "../../lib/api";
 import { format } from "date-fns";
 import { StorageFile } from "../../lib/types";
 
-type ImportResult = {
-  imported: number;
-  total: number;
-  errors: string[];
-  headers: string[];
-  mapping: Record<string, string>;
+const COLUMN_LABELS: Record<string, string> = {
+  name: "Nombre",
+  email: "Email",
+  email_alt: "Email alternativo",
+  phone: "Teléfono",
+  phone_alt_1: "Teléfono alt. 1",
+  phone_alt_2: "Teléfono alt. 2",
+  company: "Empresa",
+  address: "Dirección",
+  city: "Ciudad",
+  notes: "Notas",
+  tags: "Etiquetas",
+  customer_name: "Cliente",
+  appointment_date: "Fecha",
+  appointment_time: "Hora",
+  service_name: "Servicio",
+  cost: "Costo",
+  status: "Estado",
+  staff_name: "Atendido por",
+  comments: "Comentarios",
+  price: "Precio",
+  supplier: "Proveedor",
+  sale_price: "Precio de venta",
+  stock: "Stock",
+  min_stock: "Stock mínimo",
+  purchase_date: "Fecha de compra"
+};
+
+const colLabel = (col: string) => COLUMN_LABELS[col] ?? col;
+
+const MAPPING_SOURCE_LABELS: Record<string, string> = {
+  heuristic: "detección automática",
+  ai: "asistente de IA",
+  mixed: "detección automática + IA",
+  manual: "mapeo manual"
 };
 
 export const ExcelUploadPage = () => {
@@ -29,6 +67,7 @@ export const ExcelUploadPage = () => {
   const [importTable, setImportTable] = useState("customers");
   const [importFile, setImportFile] = useState<string>("");
   const [importModal, setImportModal] = useState(false);
+  const [analysis, setAnalysis] = useState<ImportAnalysis | null>(null);
   const [result, setResult] = useState<ImportResult | null>(null);
 
   const files = useQuery({
@@ -52,7 +91,7 @@ export const ExcelUploadPage = () => {
 
     try {
       const uploaded = await uploadExcelFile(tenant!.id, file);
-      setMessage(`Archivo "${uploaded.name}" subido.`);
+      setMessage(`Archivo "${uploaded.name}" subido. Usa "Importar" para traer los datos al sistema.`);
       await queryClient.invalidateQueries({ queryKey: ["storage-files", tenant?.id] });
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo subir el archivo.");
@@ -77,25 +116,45 @@ export const ExcelUploadPage = () => {
   const openImport = (fileName: string) => {
     setImportFile(fileName);
     setImportTable("customers");
+    setAnalysis(null);
     setResult(null);
     setImportModal(true);
   };
 
-  const doImport = async () => {
+  const runAnalysis = async () => {
     if (!tenant || !importFile) return;
     setImporting(true);
     setError(null);
-    setMessage(null);
+    setAnalysis(null);
+    setResult(null);
     try {
-      // La Edge Function exige la ruta completa con prefijo del tenant.
-      const data = await importDataFromExcel(tenant.id, `${tenant.id}/${importFile}`, importTable);
+      const data = await analyzeImportFile(`${tenant.id}/${importFile}`, importTable);
+      setAnalysis(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo analizar el archivo.");
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const confirmImport = async () => {
+    if (!tenant || !importFile || !analysis) return;
+    setImporting(true);
+    setError(null);
+    try {
+      // Reusamos el mapeo del análisis para que lo confirmado sea lo importado.
+      const data = await importDataFromExcel(`${tenant.id}/${importFile}`, importTable, analysis.mapping);
       setResult(data);
-      setMessage(`Importado: ${data.imported} de ${data.total} registros en "${importTable}".`);
+      setMessage(
+        `Importado: ${data.imported} de ${data.total} registros` +
+        (data.skipped_duplicates > 0 ? ` (${data.skipped_duplicates} duplicados omitidos)` : "") + "."
+      );
       if (data.errors.length > 0) {
-        setError(`${data.errors.length} errores.`);
+        setError(`${data.errors.length} filas con errores. Revisa el detalle en el modal.`);
+      } else {
+        setImportModal(false);
       }
-      setImportModal(false);
-      await queryClient.invalidateQueries({ queryKey: ["storage-files", tenant?.id] });
+      await queryClient.invalidateQueries();
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo importar.");
     } finally {
@@ -161,12 +220,14 @@ export const ExcelUploadPage = () => {
     }
   ];
 
+  const sampleColumns = analysis ? Object.values(analysis.mapping) : [];
+
   return (
     <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Archivos</h1>
         <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-          Subi archivos Excel o CSV con datos de clientes, citas, servicios o inventario.
+          Sube tu planilla Excel o CSV: el sistema detecta las columnas automáticamente y organiza tus datos.
         </p>
       </div>
 
@@ -180,19 +241,29 @@ export const ExcelUploadPage = () => {
         </div>
       ) : null}
 
-      {result?.errors.length ? (
-        <SurfaceMessage
-          tone="danger"
-          title="Errores de importacion"
-          description={result.errors.slice(0, 5).join("; ") + (result.errors.length > 5 ? ` y ${result.errors.length - 5} mas...` : "")}
-        />
+      {result && result.imported > 0 ? (
+        <div className="flex items-center justify-between rounded-2xl border border-transparent bg-[var(--success)]/10 p-4 shadow-[var(--neu-shadow-raised)]">
+          <div className="flex items-center gap-2 text-sm">
+            <MaterialIcon name="check_circle" size={18} className="text-[var(--success)]" />
+            <span>
+              {result.imported} registros importados. Tu información ya está organizada.
+            </span>
+          </div>
+          <Link
+            to="/dashboard"
+            className="inline-flex items-center gap-1 rounded-lg bg-[var(--primary)] px-4 py-2 text-sm font-medium text-[var(--primary-foreground)]"
+          >
+            <MaterialIcon name="monitoring" size={16} />
+            Ver métricas
+          </Link>
+        </div>
       ) : null}
 
       <div className="rounded-2xl border border-transparent bg-[var(--muted)]/30 p-6 text-center shadow-[var(--neu-shadow-raised)]">
         <MaterialIcon name="upload_file" size={32} className="mx-auto mb-3 text-[var(--muted-foreground)]" />
         <p className="mb-1 text-sm font-semibold">Subir archivo</p>
         <p className="mb-4 text-xs text-[var(--muted-foreground)]">
-          Formatos aceptados: .xlsx, .xls, .csv
+          Formatos: .xlsx, .xls, .csv · máx. 10 MB · hasta 10.000 filas
         </p>
         <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-[var(--primary)] px-4 py-2 text-sm font-medium text-[var(--primary-foreground)] shadow-[var(--neu-shadow-raised)] transition-opacity hover:opacity-90">
           <MaterialIcon name="add" size={18} />
@@ -208,29 +279,18 @@ export const ExcelUploadPage = () => {
       </div>
 
       <div className="rounded-2xl border border-transparent bg-[var(--card)] p-4 shadow-[var(--neu-shadow-raised)]">
-        <p className="mb-3 text-xs font-semibold uppercase tracking-[0.15em] text-[var(--muted-foreground)]">Formato esperado por tabla</p>
-        <p className="mb-3 text-xs text-[var(--muted-foreground)]">
-          La importación procesa archivos <strong>CSV separados por comas</strong> con la primera fila de
-          encabezados usando exactamente estos nombres de columna:
+        <p className="mb-3 text-xs font-semibold uppercase tracking-[0.15em] text-[var(--muted-foreground)]">Cómo funciona la importación</p>
+        <ol className="list-decimal space-y-1 pl-5 text-xs text-[var(--muted-foreground)]">
+          <li>Sube tu planilla tal como la tienes: los encabezados pueden estar en español o inglés (nombre, teléfono, fecha, valor...).</li>
+          <li>Presiona <strong>Importar</strong> y elige qué contiene: clientes, citas, servicios o inventario.</li>
+          <li><strong>Analizar</strong> te muestra cómo se interpretó cada columna y una vista previa, sin guardar nada.</li>
+          <li>Si todo se ve bien, <strong>Confirmar importación</strong> guarda los datos (los duplicados se omiten).</li>
+        </ol>
+        <p className="mt-3 text-xs text-[var(--muted-foreground)]">
+          ¿Columnas con nombres poco comunes? Configura un asistente de IA en{" "}
+          <Link to="/configuracion" className="text-[var(--primary)] underline underline-offset-2">Configuración</Link>{" "}
+          para que ayude a reconocerlas.
         </p>
-        <div className="grid gap-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
-          <div>
-            <p className="font-semibold">Clientes</p>
-            <p className="text-[var(--muted-foreground)]">name, email, phone, company, notes</p>
-          </div>
-          <div>
-            <p className="font-semibold">Citas</p>
-            <p className="text-[var(--muted-foreground)]">appointment_date, appointment_time, service_name, cost, status, staff_name</p>
-          </div>
-          <div>
-            <p className="font-semibold">Servicios</p>
-            <p className="text-[var(--muted-foreground)]">name, price</p>
-          </div>
-          <div>
-            <p className="font-semibold">Inventario</p>
-            <p className="text-[var(--muted-foreground)]">name, supplier, cost, sale_price, stock</p>
-          </div>
-        </div>
       </div>
 
       {files.isLoading ? (
@@ -249,10 +309,10 @@ export const ExcelUploadPage = () => {
       <Modal open={importModal} title="Importar datos" onClose={() => setImportModal(false)} size="lg">
         <div className="space-y-4">
           <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium">Importar en</label>
+            <label className="text-sm font-medium">¿Qué contiene este archivo?</label>
             <select
               value={importTable}
-              onChange={(e) => { setImportTable(e.target.value); setResult(null); }}
+              onChange={(e) => { setImportTable(e.target.value); setAnalysis(null); setResult(null); }}
               className="theme-input rounded-lg px-3 py-2 text-sm"
             >
               <option value="customers">Clientes</option>
@@ -266,20 +326,78 @@ export const ExcelUploadPage = () => {
             Archivo: <strong>{importFile}</strong>
           </p>
 
-          {result ? (
-            <div className="rounded-xl bg-[var(--muted)]/30 p-3 text-sm">
-              <p>{result.headers.length} columnas detectadas: {result.headers.join(", ")}</p>
-              {result.imported !== undefined ? (
-                <p className="mt-1 font-semibold text-[var(--success)]">{result.imported} de {result.total} registros importados</p>
+          {analysis ? (
+            <div className="space-y-3 rounded-xl bg-[var(--muted)]/30 p-3 text-sm">
+              <p>
+                <strong>{analysis.valid_rows}</strong> de {analysis.total_rows} filas listas para importar
+                <span className="text-xs text-[var(--muted-foreground)]"> · columnas reconocidas por {MAPPING_SOURCE_LABELS[analysis.mapping_source] ?? analysis.mapping_source}</span>
+              </p>
+
+              <div className="flex flex-wrap gap-1.5">
+                {Object.entries(analysis.mapping).map(([from, to]) => (
+                  <span key={from} className="inline-flex items-center gap-1 rounded-full bg-[var(--card)] px-2 py-0.5 text-xs shadow-[var(--neu-shadow-raised)]">
+                    {from} <MaterialIcon name="arrow_forward" size={11} /> <strong>{colLabel(to)}</strong>
+                  </span>
+                ))}
+              </div>
+
+              {analysis.unmapped.length > 0 ? (
+                <p className="text-xs text-[var(--muted-foreground)]">
+                  Columnas ignoradas: {analysis.unmapped.join(", ")}
+                </p>
+              ) : null}
+
+              {analysis.ai_error ? (
+                <p className="text-xs text-[var(--destructive)]">Asistente de IA no disponible: {analysis.ai_error}</p>
+              ) : null}
+
+              {analysis.sample.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-left text-[var(--muted-foreground)]">
+                        {sampleColumns.map((c) => <th key={c} className="px-2 py-1 font-medium">{colLabel(c)}</th>)}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {analysis.sample.map((row, i) => (
+                        <tr key={i} className="border-t border-[var(--border)]/50">
+                          {sampleColumns.map((c) => (
+                            <td key={c} className="px-2 py-1">{Array.isArray(row[c]) ? (row[c] as string[]).join(", ") : String(row[c] ?? "")}</td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : null}
+
+              {analysis.errors.length > 0 ? (
+                <div className="text-xs text-[var(--destructive)]">
+                  {analysis.errors.slice(0, 5).map((e, i) => <p key={i}>{e}</p>)}
+                </div>
               ) : null}
             </div>
           ) : null}
 
+          {result && result.errors.length > 0 ? (
+            <div className="rounded-xl bg-[var(--destructive)]/10 p-3 text-xs text-[var(--destructive)]">
+              {result.errors.slice(0, 5).map((e, i) => <p key={i}>{e}</p>)}
+            </div>
+          ) : null}
+
           <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setImportModal(false)}>Cancelar</Button>
-            <Button onClick={() => void doImport()} disabled={importing}>
-              {importing ? "Importando..." : "Importar"}
+            <Button variant="outline" onClick={() => setImportModal(false)}>Cerrar</Button>
+            <Button variant={analysis ? "outline" : "default"} onClick={() => void runAnalysis()} disabled={importing}>
+              <MaterialIcon name="search" size={16} />
+              {importing && !analysis ? "Analizando..." : "Analizar"}
             </Button>
+            {analysis && analysis.valid_rows > 0 ? (
+              <Button onClick={() => void confirmImport()} disabled={importing}>
+                <MaterialIcon name="publish" size={16} />
+                {importing ? "Importando..." : `Confirmar importación (${analysis.valid_rows})`}
+              </Button>
+            ) : null}
           </div>
         </div>
       </Modal>

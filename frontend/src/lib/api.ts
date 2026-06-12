@@ -435,10 +435,95 @@ export const fetchAppointmentsPerDay = async () => {
 // Import data
 // =========================
 
-export const importDataFromExcel = async (tenantId: string, filePath: string, table: string) => {
-  const data = await invokeEdgeFunction<Record<string, unknown>, { imported: number; total: number; errors: string[]; headers: string[]; mapping: Record<string, string> }>(
+export type ImportAnalysis = {
+  dry_run: true;
+  table: string;
+  total_rows: number;
+  valid_rows: number;
+  headers: string[];
+  mapping: Record<string, string>;
+  unmapped: string[];
+  mapping_source: "heuristic" | "ai" | "mixed" | "manual";
+  ai_error: string | null;
+  sample: Record<string, unknown>[];
+  errors: string[];
+};
+
+export type ImportResult = {
+  imported: number;
+  skipped_duplicates: number;
+  total: number;
+  errors: string[];
+  mapping: Record<string, string>;
+  mapping_source: string;
+  table: string;
+};
+
+export const analyzeImportFile = async (filePath: string, table: string) => {
+  return invokeEdgeFunction<Record<string, unknown>, ImportAnalysis>(
     "import-data",
-    { tenant_id: tenantId, file_path: filePath, table }
+    { file_path: filePath, table, dry_run: true }
   );
+};
+
+export const importDataFromExcel = async (filePath: string, table: string, mapping?: Record<string, string>) => {
+  return invokeEdgeFunction<Record<string, unknown>, ImportResult>(
+    "import-data",
+    mapping ? { file_path: filePath, table, mapping } : { file_path: filePath, table }
+  );
+};
+
+// =========================
+// AI settings (smart import)
+// =========================
+
+export type AiSettings = {
+  tenant_id: string;
+  provider: "anthropic" | "openai";
+  base_url: string | null;
+  model: string;
+  updated_at: string;
+};
+
+export const fetchAiSettings = async (tenantId: string): Promise<AiSettings | null> => {
+  // api_key is write-only at the DB level (column grant); never request it.
+  const { data, error } = await supabase
+    .from("ai_settings")
+    .select("tenant_id, provider, base_url, model, updated_at")
+    .eq("tenant_id", tenantId)
+    .maybeSingle();
+  if (error) throw error;
   return data;
+};
+
+export const saveAiSettings = async (
+  tenantId: string,
+  payload: { provider: string; base_url: string | null; model: string; api_key?: string }
+) => {
+  const existing = await fetchAiSettings(tenantId);
+  if (existing) {
+    const update: Record<string, unknown> = {
+      provider: payload.provider,
+      base_url: payload.base_url,
+      model: payload.model
+    };
+    if (payload.api_key) update.api_key = payload.api_key;
+    const { error } = await supabase.from("ai_settings").update(update).eq("tenant_id", tenantId);
+    if (error) throw error;
+  } else {
+    if (!payload.api_key) throw new Error("Ingresa la API key.");
+    const { error } = await supabase.from("ai_settings").insert({
+      tenant_id: tenantId,
+      provider: payload.provider,
+      base_url: payload.base_url,
+      model: payload.model,
+      api_key: payload.api_key
+    });
+    if (error) throw error;
+  }
+};
+
+export const deleteAiSettings = async (tenantId: string) => {
+  const { error } = await supabase.from("ai_settings").delete().eq("tenant_id", tenantId);
+  if (error) throw error;
 };

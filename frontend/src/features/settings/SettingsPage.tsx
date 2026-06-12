@@ -6,6 +6,7 @@ import { BrandingSection } from "./BrandingSection";
 import { PasswordSection } from "./PasswordSection";
 import { TeamSection } from "./TeamSection";
 import { PlanSection } from "./PlanSection";
+import { AiSection } from "./AiSection";
 
 export const SettingsPage = () => {
   const { isAdmin } = useTenant();
@@ -33,6 +34,7 @@ export const SettingsPage = () => {
         <BrandingSection onFeedback={setFeedback} />
         <PasswordSection onFeedback={setFeedback} />
         {isAdmin && <TeamSection onFeedback={setFeedback} />}
+        {isAdmin && <AiSection onFeedback={setFeedback} />}
         <PlanSection />
       </section>
     </div>
