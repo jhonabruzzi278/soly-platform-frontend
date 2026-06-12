@@ -148,10 +148,30 @@ passthrough de usuario.
 
 ---
 
+## 5.c. Suite de tests de RLS (robustez multi-tenant)
+
+Se agregó [`backend/supabase/tests/rls_robustness_test.sql`](../backend/supabase/tests/rls_robustness_test.sql)
+— **21 aserciones** en SQL puro (sin pgTAP) que crean 2 tenants con roles
+owner/member/viewer, cambian el contexto JWT de cada usuario y verifican:
+
+- **T1–T7** aislamiento cross-tenant en SELECT (customers, appointments,
+  services, memberships, tenants, subscriptions).
+- **T8–T9** INSERT cross-tenant denegado.
+- **T10–T14** gating por rol (member crea clientes pero no citas; viewer es
+  solo lectura; no-owner/admin no puede borrar).
+- **T15** feature-gating (un plan sin la feature no puede escribir).
+- **T16–T18** lockdown de funciones/relaciones (RPC anon, RPC admin, rate_limits).
+- **T19–T21** trigger CRIT-1 (colisión de slug e invitación forjada no conceden
+  membresía; un token de invitación válido sí).
+
+Toda la suite corre en una transacción que **siempre hace rollback** (no
+persiste datos). Resultado actual: **ALL 21 CHECKS PASSED**. Ejecutar con
+`psql "<DB_URL>" -f backend/supabase/tests/rls_robustness_test.sql` o desde el
+SQL Editor.
+
 ## 6. Pendientes de la auditoría general (no críticos, recomendados)
 
-- **Tests de RLS multi-tenant** (pgTAP): es la ausencia que permitió que CRIT-1 y
-  CRIT-5 pasaran desapercibidos. Prioridad alta.
+- ~~**Tests de RLS multi-tenant**~~ ✅ **Hecho** (§5.c) — 21 aserciones, todas en verde.
 - **Rate limiting atómico** (hoy check-then-insert, TOCTOU) y sin `DELETE` por request.
 - **Import sin DDL global** (`disable_rollup_trigger` toma lock platform-wide) y parser
   CSV/Excel robusto.
