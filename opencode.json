@@ -1,0 +1,170 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "anthropic/claude-sonnet-4-5",
+  "small_model": "anthropic/claude-haiku-4-5",
+  "default_agent": "build",
+  "plugin": ["ecc-universal"],
+  "instructions": [
+    ".agents/skills/supabase/SKILL.md",
+    ".agents/skills/supabase-postgres-best-practices/SKILL.md",
+    ".agents/skills/frontend-design/SKILL.md",
+    ".agents/skills/deploy-to-vercel/SKILL.md",
+    ".agents/skills/accessibility/SKILL.md",
+    ".agents/skills/seo/SKILL.md",
+    "node_modules/ecc-universal/skills/coding-standards/SKILL.md",
+    "node_modules/ecc-universal/skills/backend-patterns/SKILL.md",
+    "node_modules/ecc-universal/skills/frontend-patterns/SKILL.md",
+    "node_modules/ecc-universal/skills/tdd-workflow/SKILL.md",
+    "node_modules/ecc-universal/skills/security-review/SKILL.md",
+    "node_modules/ecc-universal/skills/verification-loop/SKILL.md",
+    "node_modules/ecc-universal/skills/api-design/SKILL.md",
+    "node_modules/ecc-universal/skills/react-patterns/SKILL.md",
+    "node_modules/ecc-universal/skills/react-testing/SKILL.md",
+    "node_modules/ecc-universal/skills/postgres-patterns/SKILL.md",
+    "node_modules/ecc-universal/skills/database-migrations/SKILL.md",
+    "node_modules/ecc-universal/skills/e2e-testing/SKILL.md",
+    "node_modules/ecc-universal/skills/error-handling/SKILL.md"
+  ],
+  "agent": {
+    "build": {
+      "description": "Primary coding agent for development work",
+      "mode": "primary",
+      "tools": {
+        "write": true,
+        "edit": true,
+        "bash": true,
+        "read": true
+      }
+    },
+    "planner": {
+      "description": "Expert planning for complex features and refactoring",
+      "mode": "subagent",
+      "prompt": "{file:node_modules/ecc-universal/.opencode/prompts/agents/planner.txt}",
+      "tools": { "read": true, "bash": true, "write": false, "edit": false }
+    },
+    "architect": {
+      "description": "Software architecture specialist for system design and scalability",
+      "mode": "subagent",
+      "prompt": "{file:node_modules/ecc-universal/.opencode/prompts/agents/architect.txt}",
+      "tools": { "read": true, "bash": true, "write": false, "edit": false }
+    },
+    "code-reviewer": {
+      "description": "Code review for quality, security, and maintainability",
+      "mode": "subagent",
+      "prompt": "{file:node_modules/ecc-universal/.opencode/prompts/agents/code-reviewer.txt}",
+      "tools": { "read": true, "bash": true, "write": false, "edit": false }
+    },
+    "security-reviewer": {
+      "description": "Security vulnerability detection and remediation",
+      "mode": "subagent",
+      "prompt": "{file:node_modules/ecc-universal/.opencode/prompts/agents/security-reviewer.txt}",
+      "tools": { "read": true, "bash": true, "write": true, "edit": true }
+    },
+    "tdd-guide": {
+      "description": "Test-Driven Development with 80%+ coverage enforcement",
+      "mode": "subagent",
+      "prompt": "{file:node_modules/ecc-universal/.opencode/prompts/agents/tdd-guide.txt}",
+      "tools": { "read": true, "write": true, "edit": true, "bash": true }
+    },
+    "build-error-resolver": {
+      "description": "Build and TypeScript error resolution with minimal diffs",
+      "mode": "subagent",
+      "prompt": "{file:node_modules/ecc-universal/.opencode/prompts/agents/build-error-resolver.txt}",
+      "tools": { "read": true, "write": true, "edit": true, "bash": true }
+    },
+    "e2e-runner": {
+      "description": "End-to-end Playwright testing for critical user flows",
+      "mode": "subagent",
+      "prompt": "{file:node_modules/ecc-universal/.opencode/prompts/agents/e2e-runner.txt}",
+      "tools": { "read": true, "write": true, "edit": true, "bash": true }
+    },
+    "database-reviewer": {
+      "description": "PostgreSQL/Supabase specialist for query optimization, schema design, and security",
+      "mode": "subagent",
+      "prompt": "{file:node_modules/ecc-universal/.opencode/prompts/agents/database-reviewer.txt}",
+      "tools": { "read": true, "write": true, "edit": true, "bash": true }
+    },
+    "refactor-cleaner": {
+      "description": "Dead code cleanup and consolidation specialist",
+      "mode": "subagent",
+      "prompt": "{file:node_modules/ecc-universal/.opencode/prompts/agents/refactor-cleaner.txt}",
+      "tools": { "read": true, "write": true, "edit": true, "bash": true }
+    },
+    "doc-updater": {
+      "description": "Documentation and codemap specialist",
+      "mode": "subagent",
+      "prompt": "{file:node_modules/ecc-universal/.opencode/prompts/agents/doc-updater.txt}",
+      "tools": { "read": true, "write": true, "edit": true, "bash": true }
+    }
+  },
+  "command": {
+    "plan": {
+      "description": "Create detailed implementation plan for complex features",
+      "agent": "planner",
+      "subtask": true
+    },
+    "tdd": {
+      "description": "Enforce TDD workflow with 80%+ test coverage",
+      "agent": "tdd-guide",
+      "subtask": true
+    },
+    "code-review": {
+      "description": "Review code for quality, security, and maintainability",
+      "agent": "code-reviewer",
+      "subtask": true
+    },
+    "security": {
+      "description": "Run comprehensive security review",
+      "agent": "security-reviewer",
+      "subtask": true
+    },
+    "build-fix": {
+      "description": "Fix build and TypeScript errors with minimal changes",
+      "agent": "build-error-resolver",
+      "subtask": true
+    },
+    "e2e": {
+      "description": "Generate and run E2E tests with Playwright",
+      "agent": "e2e-runner",
+      "subtask": true
+    },
+    "refactor-clean": {
+      "description": "Remove dead code and consolidate duplicates",
+      "agent": "refactor-cleaner",
+      "subtask": true
+    },
+    "orchestrate": {
+      "description": "Orchestrate multiple agents for complex tasks",
+      "agent": "planner",
+      "subtask": true
+    },
+    "learn": {
+      "description": "Extract patterns and learnings from session"
+    },
+    "checkpoint": {
+      "description": "Save verification state and progress"
+    },
+    "verify": {
+      "description": "Run verification loop"
+    },
+    "update-docs": {
+      "description": "Update documentation and codemaps",
+      "agent": "doc-updater",
+      "subtask": true
+    },
+    "test-coverage": {
+      "description": "Analyze test coverage",
+      "agent": "tdd-guide",
+      "subtask": true
+    },
+    "skill-create": {
+      "description": "Generate skills from git history"
+    },
+    "quality-gate": {
+      "description": "Run quality gates on file/repo scope"
+    }
+  },
+  "permission": {
+    "mcp_*": "ask"
+  }
+}
