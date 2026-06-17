@@ -4,89 +4,415 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Soly — Gestión inteligente para tu negocio</title>
-  <meta name="description" content="Soly es el CRM SaaS para negocios de servicios. Inspirado en Solymus, hijo de Zeus.">
+  <meta name="description" content="Agenda, clientes, inventario y reportes en un solo lugar. CRM SaaS diseñado para barberías, salones, clínicas y más negocios chilenos.">
   <meta name="robots" content="index, follow">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>☀️</text></svg>">
+  <meta property="og:title" content="Soly — Gestión inteligente para tu negocio">
+  <meta property="og:description" content="Agenda, clientes, inventario y reportes en un solo lugar.">
+  <meta property="og:url" content="https://soly.cl">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%23006666'/><text x='50' y='68' text-anchor='middle' font-size='58' font-family='monospace' font-weight='bold' fill='white'>S</text></svg>">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200">
   <style>
     :root {
-      --marble: #faf8f5; --marble-dark: #f0ece6; --aegean: #1a3c4a; --aegean-light: #2a5568;
-      --terracotta: #c4734f; --gold: #b8943e; --gold-light: #d4b96a;
-      --text: #2c2420; --text-muted: #7a7268; --stone: #d4cdc4;
+      --bg: #e7e5e4;
+      --card: #eeeceb;
+      --primary: #006666;
+      --primary-fg: #ffffff;
+      --fg: #1c1917;
+      --muted: #d6d3d1;
+      --muted-fg: #78716c;
+      --border: #d1ccc9;
+      --success: #166534;
+      --shadow-up: 5px 5px 10px #cac8c7, -5px -5px 10px #f4f2f1;
+      --shadow-down: inset 4px 4px 8px #cac8c7, inset -4px -4px 8px #f4f2f1;
+      --radius: 16px;
     }
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: "Inter", system-ui, sans-serif; background: var(--marble); color: var(--text); min-height: 100vh; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
-    h1, h2, h3, .serif { font-family: "Cormorant Garamond", Georgia, serif; font-weight: 600; letter-spacing: -0.01em; }
-    a { text-decoration: none; }
-    .meander { height: 24px; background: var(--marble-dark); position: relative; overflow: hidden; }
-    .meander::after { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(90deg, var(--aegean) 0 2px, transparent 2px 24px); opacity: 0.12; }
-    .wrap { max-width: 960px; margin: 0 auto; padding: 0 32px; }
-    .topbar { display: flex; align-items: center; justify-content: space-between; padding: 24px 0; }
-    .logo { display: flex; align-items: center; gap: 12px; }
-    .logo-mark { width: 44px; height: 44px; border-radius: 50%; background: var(--aegean); color: var(--marble); display: flex; align-items: center; justify-content: center; font-family: "Cormorant Garamond", serif; font-size: 1.5rem; font-weight: 700; }
-    .logo-text { font-size: 1.3rem; font-weight: 600; letter-spacing: 0.04em; color: var(--aegean); }
-    .btn { display: inline-flex; align-items: center; gap: 10px; padding: 12px 28px; border: 1.5px solid var(--aegean); font-family: "Inter", sans-serif; font-size: 0.85rem; font-weight: 500; cursor: pointer; transition: all 200ms ease; border-radius: 6px; }
-    .btn-ghost { background: transparent; color: var(--aegean); } .btn-ghost:hover { background: var(--aegean); color: var(--marble); }
-    .btn-filled { background: var(--aegean); color: var(--marble); } .btn-filled:hover { background: var(--aegean-light); }
-    .btn-gold { background: var(--gold); color: #fff; border-color: var(--gold); } .btn-gold:hover { background: var(--gold-light); }
-    .hero { text-align: center; padding: 80px 0 60px; }
-    .hero h1 { font-size: clamp(2.8rem, 6vw, 4.8rem); font-weight: 700; line-height: 1.08; margin-bottom: 20px; color: var(--aegean); font-style: italic; }
-    .hero h1 span { font-style: normal; color: var(--terracotta); }
-    .hero .subtitle { font-size: 1.15rem; color: var(--text-muted); max-width: 500px; margin: 0 auto 40px; line-height: 1.7; font-weight: 300; }
-    .hero .actions { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
-    .hero .ornament { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 48px; color: var(--stone); font-size: 0.7rem; letter-spacing: 0.2em; text-transform: uppercase; }
-    .quote { text-align: center; padding: 80px 0; border-top: 1px solid var(--stone); border-bottom: 1px solid var(--stone); }
-    .quote blockquote { font-family: "Cormorant Garamond", serif; font-size: clamp(1.6rem, 3vw, 2.2rem); font-style: italic; font-weight: 400; max-width: 640px; margin: 0 auto 16px; color: var(--aegean); line-height: 1.4; }
-    .quote cite { font-family: "Inter", sans-serif; font-size: 0.85rem; font-style: normal; color: var(--text-muted); }
-    .features { padding: 80px 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 48px 40px; }
-    .feature { text-align: center; } .feature .icon { width: 56px; height: 56px; margin: 0 auto 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; border: 1px solid var(--stone); background: var(--marble); }
-    .feature h3 { font-size: 1.15rem; font-weight: 600; margin-bottom: 8px; color: var(--aegean); }
-    .feature p { font-size: 0.9rem; color: var(--text-muted); line-height: 1.6; font-weight: 300; }
-    .footer { text-align: center; padding: 48px 0; border-top: 1px solid var(--stone); }
-    .footer p { font-size: 0.8rem; color: var(--text-muted); }
-    .footer .greek { font-family: "Cormorant Garamond", serif; font-style: italic; font-size: 1rem; color: var(--terracotta); margin-bottom: 12px; }
-    @media (max-width: 640px) { .hero { padding: 48px 0 40px; } .hero h1 { font-size: 2.4rem; } .wrap { padding: 0 20px; } }
-    @keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
-    .anim { animation: fadeUp 600ms ease forwards; opacity: 0; }
-    .anim:nth-child(1) { animation-delay: 100ms; } .anim:nth-child(2) { animation-delay: 250ms; } .anim:nth-child(3) { animation-delay: 400ms; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: "Space Mono", ui-monospace, monospace;
+      background: var(--bg);
+      color: var(--fg);
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+      line-height: 1.6;
+    }
+    a { text-decoration: none; color: inherit; }
+    .icon { font-family: "Material Symbols Rounded"; font-weight: 400; font-style: normal; font-size: inherit; line-height: 1; letter-spacing: normal; text-transform: none; display: inline-block; white-space: nowrap; word-wrap: normal; direction: ltr; -webkit-font-smoothing: antialiased; font-feature-settings: "liga"; vertical-align: middle; }
+
+    /* ── Layout ── */
+    .container { max-width: 1024px; margin: 0 auto; padding: 0 20px; }
+    @media (min-width: 640px) { .container { padding: 0 24px; } }
+
+    /* ── Nav ── */
+    nav {
+      position: sticky; top: 0; z-index: 50;
+      background: rgba(231,229,228,.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-inner { display: flex; align-items: center; justify-content: space-between; height: 56px; }
+    .logo { display: flex; align-items: center; gap: 8px; }
+    .logo-mark {
+      width: 28px; height: 28px; border-radius: 8px;
+      background: var(--primary);
+      color: #fff;
+      font-size: 13px; font-weight: 700;
+      display: grid; place-items: center;
+    }
+    .logo-name { font-size: 14px; font-weight: 700; letter-spacing: -.01em; }
+    .nav-links { display: flex; align-items: center; gap: 12px; }
+    .link-ghost { font-size: 13px; color: var(--muted-fg); transition: color .15s; }
+    .link-ghost:hover { color: var(--fg); }
+    .btn-sm {
+      display: inline-flex; align-items: center; gap: 6px;
+      height: 32px; padding: 0 14px;
+      background: var(--primary); color: #fff;
+      border-radius: 10px; font-size: 12px; font-weight: 700;
+      font-family: inherit;
+      box-shadow: var(--shadow-up);
+      transition: opacity .15s, transform .1s;
+    }
+    .btn-sm:hover { opacity: .9; }
+    .btn-sm:active { transform: scale(.97); }
+
+    /* ── Hero ── */
+    .hero { padding: 72px 0 56px; text-align: center; }
+    @media (min-width: 640px) { .hero { padding: 96px 0 72px; } }
+    .tag {
+      display: inline-flex; align-items: center; gap: 6px;
+      border: 1px solid color-mix(in srgb, var(--primary) 30%, transparent);
+      background: color-mix(in srgb, var(--primary) 8%, transparent);
+      color: var(--primary);
+      border-radius: 999px; padding: 4px 12px;
+      font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+      margin-bottom: 20px;
+    }
+    .hero h1 {
+      font-size: clamp(2.2rem, 6vw, 3.8rem);
+      font-weight: 700;
+      line-height: 1.1;
+      letter-spacing: -.03em;
+      margin-bottom: 20px;
+    }
+    .hero h1 .accent { color: var(--primary); }
+    .hero .sub {
+      font-size: 15px; color: var(--muted-fg);
+      max-width: 480px; margin: 0 auto 36px;
+      line-height: 1.7;
+    }
+    .hero-ctas { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+    @media (min-width: 480px) { .hero-ctas { flex-direction: row; justify-content: center; } }
+    .btn-primary {
+      display: inline-flex; align-items: center; gap: 8px;
+      height: 48px; padding: 0 24px;
+      background: var(--primary); color: #fff;
+      border-radius: 14px; font-size: 14px; font-weight: 700;
+      font-family: inherit;
+      box-shadow: var(--shadow-up);
+      transition: opacity .15s, transform .1s;
+      width: 100%; justify-content: center;
+    }
+    @media (min-width: 480px) { .btn-primary { width: auto; } }
+    .btn-primary:hover { opacity: .9; }
+    .btn-primary:active { transform: scale(.97); }
+    .btn-outline {
+      display: inline-flex; align-items: center; gap: 8px;
+      height: 48px; padding: 0 24px;
+      background: var(--card); color: var(--primary);
+      border: 1.5px solid color-mix(in srgb, var(--primary) 40%, transparent);
+      border-radius: 14px; font-size: 14px; font-weight: 700;
+      font-family: inherit;
+      box-shadow: var(--shadow-up);
+      transition: border-color .15s, transform .1s;
+      width: 100%; justify-content: center;
+    }
+    @media (min-width: 480px) { .btn-outline { width: auto; } }
+    .btn-outline:hover { border-color: color-mix(in srgb, var(--primary) 70%, transparent); }
+    .btn-outline:active { transform: scale(.97); }
+    .hero-note { margin-top: 16px; font-size: 11px; color: var(--muted-fg); }
+    .pills { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 32px; }
+    .pill {
+      border: 1px solid var(--border); background: var(--card);
+      border-radius: 999px; padding: 4px 14px;
+      font-size: 12px; color: var(--muted-fg);
+      box-shadow: var(--shadow-up);
+    }
+
+    /* ── Section titles ── */
+    .section-title { text-align: center; margin-bottom: 40px; }
+    .section-title h2 { font-size: clamp(1.5rem, 3vw, 2rem); font-weight: 700; letter-spacing: -.02em; margin-bottom: 8px; }
+    .section-title p { font-size: 13px; color: var(--muted-fg); }
+
+    /* ── Features ── */
+    .features-section { padding: 56px 0; }
+    @media (min-width: 640px) { .features-section { padding: 72px 0; } }
+    .features-grid { display: grid; gap: 16px; grid-template-columns: 1fr; }
+    @media (min-width: 480px) { .features-grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (min-width: 768px) { .features-grid { grid-template-columns: repeat(3, 1fr); } }
+    .feature-card {
+      background: var(--card); border: 1px solid transparent;
+      border-radius: var(--radius); padding: 20px;
+      box-shadow: var(--shadow-up);
+      transition: transform .15s;
+    }
+    .feature-card:hover { transform: translateY(-2px); }
+    .feature-icon {
+      width: 40px; height: 40px; border-radius: 12px;
+      background: color-mix(in srgb, var(--primary) 10%, transparent);
+      color: var(--primary);
+      display: grid; place-items: center;
+      font-size: 20px; margin-bottom: 12px;
+    }
+    .feature-card h3 { font-size: 14px; font-weight: 700; margin-bottom: 6px; }
+    .feature-card p { font-size: 12px; color: var(--muted-fg); line-height: 1.6; }
+
+    /* ── Pricing ── */
+    .pricing-section { padding: 56px 0; }
+    @media (min-width: 640px) { .pricing-section { padding: 72px 0; } }
+    .pricing-card {
+      max-width: 420px; margin: 0 auto;
+      background: var(--card);
+      border: 2px solid color-mix(in srgb, var(--primary) 50%, transparent);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-up);
+      overflow: hidden;
+    }
+    .pricing-header {
+      background: var(--primary); color: #fff;
+      text-align: center; padding: 10px 16px;
+      font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+    }
+    .pricing-body { padding: 24px; }
+    .price-row { display: flex; align-items: flex-end; gap: 10px; margin-bottom: 20px; }
+    .price-amount { font-size: 3rem; font-weight: 700; letter-spacing: -.04em; }
+    .price-meta { padding-bottom: 6px; font-size: 12px; color: var(--muted-fg); line-height: 1.4; }
+    .trial-badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: #fef3c7; border: 1px solid #fde68a;
+      border-radius: 12px; padding: 8px 12px;
+      font-size: 13px; font-weight: 700; color: #92400e;
+      margin-bottom: 20px; width: 100%;
+    }
+    .features-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px 16px; margin-bottom: 24px; }
+    .features-list li { display: flex; align-items: center; gap: 8px; font-size: 12px; list-style: none; }
+    .features-list .check { color: var(--primary); font-size: 14px; flex-shrink: 0; }
+    .pricing-ctas { display: flex; flex-direction: column; gap: 10px; }
+    .btn-pay {
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      height: 46px; border-radius: 12px;
+      font-size: 14px; font-weight: 700; font-family: inherit;
+      cursor: pointer; transition: opacity .15s, transform .1s;
+      background: var(--primary); color: #fff;
+      box-shadow: var(--shadow-up);
+    }
+    .btn-pay:hover { opacity: .9; }
+    .btn-pay:active { transform: scale(.97); }
+    .btn-trial {
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      height: 44px; border-radius: 12px;
+      font-size: 13px; font-weight: 700; font-family: inherit;
+      cursor: pointer; transition: border-color .15s, transform .1s;
+      background: var(--card); color: var(--primary);
+      border: 1.5px solid color-mix(in srgb, var(--primary) 40%, transparent);
+      box-shadow: var(--shadow-up);
+    }
+    .btn-trial:hover { border-color: color-mix(in srgb, var(--primary) 70%, transparent); }
+    .btn-trial:active { transform: scale(.97); }
+    .pricing-note { text-align: center; font-size: 11px; color: var(--muted-fg); margin-top: 12px; }
+
+    /* ── Trust ── */
+    .trust-section { border-top: 1px solid var(--border); padding: 40px 0; }
+    .trust-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; text-align: center; }
+    .trust-item .ti { font-size: 22px; color: var(--primary); margin-bottom: 6px; }
+    .trust-item h4 { font-size: 12px; font-weight: 700; margin-bottom: 4px; }
+    .trust-item p { font-size: 11px; color: var(--muted-fg); }
+    .trust-flow {
+      margin-top: 20px; padding-top: 20px;
+      border-top: 1px solid var(--border);
+      text-align: center; font-size: 11px; color: var(--muted-fg);
+    }
+    .trust-flow strong { color: var(--fg); }
+
+    /* ── Footer ── */
+    footer { border-top: 1px solid var(--border); padding: 24px 0; text-align: center; }
+    footer p { font-size: 11px; color: var(--muted-fg); }
+    footer a { color: var(--primary); text-decoration: underline; text-underline-offset: 3px; }
   </style>
 </head>
 <body>
-<div class="meander"></div>
-<main class="wrap">
-  <header class="topbar">
-    <div class="logo"><div class="logo-mark">Σ</div><span class="logo-text">Soly</span></div>
-    <a href="https://app.soly.cl/login" class="btn btn-ghost">Acceso Clientes →</a>
-  </header>
-  <section class="hero">
-    <h1 class="anim">Orden en el <span>caos</span></h1>
-    <p class="subtitle anim">Como Solymus trajo estructura al Olimpo, Soly trae orden a tu negocio.</p>
-    <div class="actions anim">
-      <a href="https://app.soly.cl/onboarding" class="btn btn-filled">Comenzar ahora</a>
-      <a href="https://app.soly.cl/login" class="btn btn-gold">Acceso Clientes</a>
+
+<!-- Nav -->
+<nav>
+  <div class="container">
+    <div class="nav-inner">
+      <div class="logo">
+        <div class="logo-mark">S</div>
+        <span class="logo-name">Soly</span>
+      </div>
+      <div class="nav-links">
+        <a href="https://app.soly.cl/login" class="link-ghost">Iniciar sesión</a>
+        <a href="https://app.soly.cl/login?tab=signup" class="btn-sm">
+          <span class="icon" style="font-size:14px">rocket_launch</span>
+          Empezar gratis
+        </a>
+      </div>
     </div>
-    <div class="ornament">───── ☀️ ─────</div>
-  </section>
-  <section class="quote">
-    <blockquote>&ldquo;La excelencia no es un acto, sino un hábito.&rdquo;</blockquote>
-    <cite>— Aristóteles</cite>
-  </section>
-  <section class="features">
-    <div class="feature"><div class="icon">🏛️</div><h3>Gestión Centralizada</h3><p>Clientes, citas, servicios y reportes en una sola plataforma.</p></div>
-    <div class="feature"><div class="icon">📜</div><h3>Historial Completo</h3><p>Cada cliente tiene su registro: visitas, gasto total, preferencias.</p></div>
-    <div class="feature"><div class="icon">⚡</div><h3>Rápido y Simple</h3><p>Importa tus datos desde Excel en segundos. Dashboard con métricas en tiempo real.</p></div>
-    <div class="feature"><div class="icon">🏺</div><h3>Diseño con Propósito</h3><p>Inspirado en la proporción áurea y la claridad clásica.</p></div>
-    <div class="feature"><div class="icon">🛡️</div><h3>Seguridad Total</h3><p>Tus datos aislados y protegidos con cifrado de extremo a extremo.</p></div>
-    <div class="feature"><div class="icon">🌿</div><h3>Crece Contigo</h3><p>Desde un barbero solitario hasta una cadena de salones. Soly escala.</p></div>
-  </section>
-</main>
-<footer class="footer">
-  <p class="greek">Σολυμυς · Solymus · Hijo de Zeus</p>
-  <p>Soly &copy; 2026 · CRM inteligente para negocios de servicios</p>
-  <p style="margin-top:8px"><a href="https://app.soly.cl/login" style="color:var(--aegean);text-decoration:underline">Acceso Clientes</a> · <a href="https://app.soly.cl/onboarding" style="color:var(--aegean);text-decoration:underline">Crear cuenta</a></p>
+  </div>
+</nav>
+
+<!-- Hero -->
+<section class="hero">
+  <div class="container">
+    <div class="tag">
+      <span class="icon" style="font-size:12px">location_on</span>
+      Para negocios chilenos
+    </div>
+    <h1>Tu negocio,<br><span class="accent">simplificado.</span></h1>
+    <p class="sub">Agenda, clientes, inventario y reportes — todo en un solo lugar. Diseñado para barberías, salones, clínicas y más.</p>
+    <div class="hero-ctas">
+      <a href="https://app.soly.cl/login?tab=signup" class="btn-primary">
+        <span class="icon" style="font-size:17px">card_giftcard</span>
+        Probar gratis — 14 días
+      </a>
+      <a href="https://app.soly.cl/login?tab=signup&redirect=/billing%3FskipTrial=1" class="btn-outline">
+        <span class="icon" style="font-size:17px">credit_card</span>
+        Suscribirse · $49.000/mes
+      </a>
+    </div>
+    <p class="hero-note">Sin tarjeta de crédito requerida para la prueba · Cancela cuando quieras</p>
+    <div class="pills">
+      <span class="pill">Barberías</span>
+      <span class="pill">Salones de belleza</span>
+      <span class="pill">Clínicas</span>
+      <span class="pill">Centros de fitness</span>
+      <span class="pill">Spas</span>
+      <span class="pill">Talleres</span>
+    </div>
+  </div>
+</section>
+
+<!-- Features -->
+<section class="features-section">
+  <div class="container">
+    <div class="section-title">
+      <h2>Todo lo que necesitas</h2>
+      <p>Un sistema completo para gestionar y crecer.</p>
+    </div>
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon"><span class="icon">calendar_month</span></div>
+        <h3>Agenda inteligente</h3>
+        <p>Gestiona citas, horarios y disponibilidad en tiempo real.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon"><span class="icon">group</span></div>
+        <h3>Gestión de clientes</h3>
+        <p>Historial completo, contactos y seguimiento de cada cliente.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon"><span class="icon">bar_chart</span></div>
+        <h3>Reportes y KPIs</h3>
+        <p>Revenue, ocupación y métricas de crecimiento al instante.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon"><span class="icon">inventory_2</span></div>
+        <h3>Control de inventario</h3>
+        <p>Stock, productos y alertas de reabastecimiento integradas.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon"><span class="icon">badge</span></div>
+        <h3>Multi-usuario</h3>
+        <p>Hasta 20 usuarios con roles y permisos diferenciados.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon"><span class="icon">support_agent</span></div>
+        <h3>Soporte en español</h3>
+        <p>Equipo local disponible para ayudarte cuando lo necesitas.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Pricing -->
+<section class="pricing-section">
+  <div class="container">
+    <div class="section-title">
+      <h2>Precio único, sin sorpresas</h2>
+      <p>Un plan con todo incluido para tu negocio.</p>
+    </div>
+    <div class="pricing-card">
+      <div class="pricing-header">Business · Todo incluido</div>
+      <div class="pricing-body">
+        <div class="price-row">
+          <span class="price-amount">$49.000</span>
+          <span class="price-meta">CLP<br>/ mes</span>
+        </div>
+        <div class="trial-badge">
+          <span class="icon" style="font-size:16px;color:#92400e">card_giftcard</span>
+          14 días de prueba gratis — sin tarjeta requerida
+        </div>
+        <ul class="features-list">
+          <li><span class="icon check">check</span>Hasta 20 usuarios</li>
+          <li><span class="icon check">check</span>Hasta 10.000 archivos</li>
+          <li><span class="icon check">check</span>Gestión de clientes</li>
+          <li><span class="icon check">check</span>Citas y agenda</li>
+          <li><span class="icon check">check</span>Reportes y KPIs</li>
+          <li><span class="icon check">check</span>Inventario</li>
+          <li><span class="icon check">check</span>Dashboard avanzado</li>
+          <li><span class="icon check">check</span>Soporte prioritario</li>
+        </ul>
+        <div class="pricing-ctas">
+          <a href="https://app.soly.cl/login?tab=signup&redirect=/billing%3FskipTrial=1" class="btn-pay">
+            <span class="icon" style="font-size:16px">credit_card</span>
+            Pagar ahora · $49.000/mes
+          </a>
+          <a href="https://app.soly.cl/login?tab=signup" class="btn-trial">
+            <span class="icon" style="font-size:15px">card_giftcard</span>
+            Prueba gratis 14 días
+          </a>
+        </div>
+        <p class="pricing-note">IVA incluido · Facturación mensual · Cancela cuando quieras</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Trust -->
+<section class="trust-section">
+  <div class="container">
+    <div class="trust-grid">
+      <div class="trust-item">
+        <div class="ti"><span class="icon">lock</span></div>
+        <h4>Pago seguro</h4>
+        <p>SSL 256-bit</p>
+      </div>
+      <div class="trust-item">
+        <div class="ti"><span class="icon">verified_user</span></div>
+        <h4>Flow.cl</h4>
+        <p>Pasarela líder Chile</p>
+      </div>
+      <div class="trust-item">
+        <div class="ti"><span class="icon">sentiment_satisfied</span></div>
+        <h4>Sin permanencia</h4>
+        <p>Cancela cuando quieras</p>
+      </div>
+    </div>
+    <div class="trust-flow">
+      Pagos procesados por <strong>Flow.cl</strong> · Pasarela líder en Chile · Acepta tarjetas y transferencias bancarias
+    </div>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer>
+  <div class="container">
+    <p>© 2026 Soly · Hecho en Chile 🇨🇱 · <a href="https://app.soly.cl/login">Iniciar sesión</a></p>
+  </div>
 </footer>
-<div class="meander"></div>
+
 </body>
 </html>
