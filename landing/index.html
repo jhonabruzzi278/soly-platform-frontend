@@ -40,6 +40,24 @@
       overflow-x: hidden;
       line-height: 1.6;
     }
+
+    /* ── Background effect (ibelick.com — grid + teal radial glow) ── */
+    #bg-layer {
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      background-color: var(--bg);
+      background-image:
+        linear-gradient(to right, rgba(0,102,102,0.07) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(0,102,102,0.07) 1px, transparent 1px);
+      background-size: 5rem 3.5rem;
+    }
+    #bg-layer::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle 700px at 50% -60px, rgba(0,102,102,0.14), transparent 70%);
+    }
     a { text-decoration: none; color: inherit; }
     .icon { font-family: "Material Symbols Rounded"; font-weight: 400; font-style: normal; font-size: inherit; line-height: 1; letter-spacing: normal; text-transform: none; display: inline-block; white-space: nowrap; word-wrap: normal; direction: ltr; -webkit-font-smoothing: antialiased; font-feature-settings: "liga"; vertical-align: middle; }
 
@@ -244,6 +262,7 @@
   </style>
 </head>
 <body>
+<div id="bg-layer" aria-hidden="true"></div>
 
 <!-- Nav -->
 <nav>
