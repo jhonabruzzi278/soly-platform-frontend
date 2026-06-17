@@ -84,11 +84,22 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Find subscription by payer email
-    // The payer email matches the subscription owner's email
+    // Find subscription: first by commerceOrder (direct-pay flow), then by payer email (fallback)
     let dbSubscription: Record<string, unknown> | null = null
-    if (payment.payer) {
-      // Find the user by email, then their Flow subscription
+
+    // For /payment/create flow, provider_subscription_id holds the commerceOrder
+    if (payment.commerceOrder) {
+      const { data: sub } = await supabaseAdmin
+        .from('subscriptions')
+        .select('*')
+        .eq('provider', 'flow')
+        .eq('provider_subscription_id', payment.commerceOrder)
+        .maybeSingle()
+      dbSubscription = sub
+    }
+
+    // Fallback: find by payer email for trial subscriptions
+    if (!dbSubscription && payment.payer) {
       const { data: profile } = await supabaseAdmin
         .from('profiles')
         .select('id')
@@ -101,7 +112,9 @@ Deno.serve(async (req) => {
           .select('*')
           .eq('user_id', profile.id)
           .eq('provider', 'flow')
-          .in('status', ['active', 'trialing'])
+          .in('status', ['active', 'trialing', 'pending_payment'])
+          .order('created_at', { ascending: false })
+          .limit(1)
           .maybeSingle()
         dbSubscription = sub
       }

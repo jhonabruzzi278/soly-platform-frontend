@@ -8,6 +8,7 @@ const PLAN_AMOUNT: Record<string, string> = { business: '49000' }
 
 type FlowCustomer = { customerId: string }
 type FlowSubscription = { subscriptionId: string; url?: string; token?: string }
+type FlowPayment = { url: string; token: string; flowOrder: number }
 
 Deno.serve(async (req) => {
   const corsResponse = handleCorsOptions(req)
@@ -89,33 +90,9 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Create Flow subscription
-    // Plan must exist in Flow with id = FLOW_PLAN_ID env var (or soly-business-v1 by default).
-    // See setup instructions: https://www.flow.cl/app/web/plan/list
-    // Support FLOW_BUSINESS_PLAN_ID (legacy) as fallback
-    const flowPlanId = Deno.env.get('FLOW_PLAN_ID')
-      ?? Deno.env.get('FLOW_BUSINESS_PLAN_ID')
-      ?? `soly-${plan}-v1`
     const webhookUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/flow-webhook`
 
-    // skipTrial=true → trialPeriodDays=0 (number), Flow charges immediately and returns url+token
-    // skipTrial=false → trialPeriodDays=14, $0 invoice, no payment redirect needed
-    const trialDays = skipTrial ? 0 : 14
-
-    const subscription = await flowPost<FlowSubscription>(
-      '/subscription/create',
-      {
-        planId: flowPlanId,
-        customerId: flowCustomerId,
-        trialPeriodDays: trialDays,
-        urlReturn: `${appUrl}/billing?billing=success`,
-        urlConfirmation: webhookUrl
-      },
-      flowApiKey,
-      flowSecretKey
-    )
-
-    // If the user had a manual trial, cancel it before creating the Flow subscription.
+    // Cancel any stale manual trial before proceeding
     if (existingSub && existingSub.provider === 'manual') {
       await supabaseAdmin
         .from('subscriptions')
@@ -123,30 +100,94 @@ Deno.serve(async (req) => {
         .eq('id', existingSub.id)
     }
 
-    const paymentUrl = subscription.url && subscription.token
-      ? `${subscription.url}?token=${subscription.token}`
-      : null
+    if (skipTrial) {
+      // ── Direct pay: use /payment/create so Flow returns a real payment URL ──
+      // Flow's /subscription/create with trialPeriodDays=0 does NOT return url+token.
+      // /payment/create always returns url+token for the checkout page.
+      const commerceOrder = crypto.randomUUID().replace(/-/g, '').slice(0, 20)
 
-    // For direct pay: insert as 'pending_payment' so the user can retry if they cancel.
-    // The webhook (flow-webhook) updates it to 'active' when Flow confirms the charge.
-    // For trial: insert as 'trialing' immediately (no payment required yet).
-    const initialStatus = skipTrial ? 'pending_payment' : 'trialing'
-    const trialEndsAt = skipTrial
-      ? null
-      : new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString()
+      // Cancel any previous pending_payment subscriptions for this user (allow clean retry)
+      await supabaseAdmin
+        .from('subscriptions')
+        .update({ status: 'cancelled', cancelled_at: new Date().toISOString() })
+        .eq('user_id', user.id)
+        .eq('product', 'soly')
+        .eq('status', 'pending_payment')
 
-    await supabaseAdmin.from('subscriptions').insert({
+      // Insert subscription now so the webhook can find it via commerceOrder
+      const { error: insertError } = await supabaseAdmin.from('subscriptions').insert({
+        user_id: user.id,
+        product: 'soly',
+        plan,
+        status: 'pending_payment',
+        provider: 'flow',
+        provider_subscription_id: commerceOrder,
+        trial_ends_at: null
+      })
+      if (insertError) {
+        throw new Error('Error al registrar la suscripción: ' + insertError.message)
+      }
+
+      const amount = PLAN_AMOUNT[plan] ?? '49000'
+      const payment = await flowPost<FlowPayment>(
+        '/payment/create',
+        {
+          commerceOrder,
+          subject: `Soly · Plan ${plan} mensual`,
+          currency: 'CLP',
+          amount,
+          email: user.email ?? '',
+          urlConfirmation: webhookUrl,
+          urlReturn: `${appUrl}/billing?billing=success`
+        },
+        flowApiKey,
+        flowSecretKey
+      )
+
+      const paymentUrl = `${payment.url}?token=${payment.token}`
+
+      return new Response(
+        JSON.stringify({ url: paymentUrl }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+      )
+    }
+
+    // ── Trial flow: /subscription/create with 14-day trial ──
+    // Plan must exist in Flow dashboard with id = FLOW_PLAN_ID env var.
+    const flowPlanId = Deno.env.get('FLOW_PLAN_ID')
+      ?? Deno.env.get('FLOW_BUSINESS_PLAN_ID')
+      ?? `soly-${plan}-v1`
+
+    const subscription = await flowPost<FlowSubscription>(
+      '/subscription/create',
+      {
+        planId: flowPlanId,
+        customerId: flowCustomerId,
+        trialPeriodDays: '14',
+        urlReturn: `${appUrl}/billing?billing=success`,
+        urlConfirmation: webhookUrl
+      },
+      flowApiKey,
+      flowSecretKey
+    )
+
+    const trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString()
+
+    const { error: insertError } = await supabaseAdmin.from('subscriptions').insert({
       user_id: user.id,
       product: 'soly',
       plan,
-      status: initialStatus,
+      status: 'trialing',
       provider: 'flow',
       provider_subscription_id: subscription.subscriptionId,
       trial_ends_at: trialEndsAt
     })
+    if (insertError) {
+      console.error('[flow-create-subscription] DB insert error (non-fatal):', insertError.message)
+    }
 
     return new Response(
-      JSON.stringify({ url: paymentUrl }),
+      JSON.stringify({ url: null }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     )
   } catch (error) {

@@ -102,7 +102,7 @@ export type Subscription = {
   user_id: string;
   product: string;
   plan: PlanKey;
-  status: "active" | "cancelled" | "expired" | "trialing";
+  status: "active" | "cancelled" | "expired" | "trialing" | "pending_payment";
   provider: string;
   provider_subscription_id: string | null;
   current_period_end: string | null;
