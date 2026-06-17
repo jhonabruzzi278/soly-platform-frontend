@@ -40,19 +40,26 @@ Deno.serve(async (req) => {
     const flowApiKey = Deno.env.get('FLOW_API_KEY')
     const flowSecretKey = Deno.env.get('FLOW_SECRET_KEY')
 
-    // Cancel in Flow first (only real Flow subscriptions, not manual trials)
+    // Cancel in Flow for recurring subscriptions.
+    // Direct-pay subscriptions (created via /payment/create) store a commerceOrder
+    // in provider_subscription_id, not a Flow subscription ID — /subscription/cancel
+    // will reject those, so we catch the error and proceed to cancel in DB regardless.
     if (
       subscription.provider === 'flow' &&
       subscription.provider_subscription_id &&
       flowApiKey &&
       flowSecretKey
     ) {
-      await flowPost(
-        '/subscription/cancel',
-        { subscriptionId: subscription.provider_subscription_id },
-        flowApiKey,
-        flowSecretKey
-      )
+      try {
+        await flowPost(
+          '/subscription/cancel',
+          { subscriptionId: subscription.provider_subscription_id },
+          flowApiKey,
+          flowSecretKey
+        )
+      } catch (flowError) {
+        console.warn('[flow-cancel] Flow cancel failed (may be a one-time payment):', flowError instanceof Error ? flowError.message : flowError)
+      }
     }
 
     const supabaseAdmin = createClient(
