@@ -13,12 +13,9 @@ export const LoginPage = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const redirectTo = searchParams.get("redirect") ?? "/dashboard";
-  const [tab, setTab] = useState<Tab>(searchParams.get("tab") === "signup" ? "signup" : "login");
 
-  // Already logged in → skip the form and go straight to the intended destination
-  if (!authLoading && session) {
-    return <Navigate to={redirectTo} replace />;
-  }
+  // All hooks must be declared before any conditional return
+  const [tab, setTab] = useState<Tab>(searchParams.get("tab") === "signup" ? "signup" : "login");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -33,6 +30,11 @@ export const LoginPage = () => {
   const [sEmail, setSEmail] = useState("");
   const [sPassword, setSPassword] = useState("");
   const [sConfirm, setSConfirm] = useState("");
+
+  // Already logged in → skip the form and go straight to the intended destination
+  if (!authLoading && session) {
+    return <Navigate to={redirectTo} replace />;
+  }
 
   const isValidEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 
