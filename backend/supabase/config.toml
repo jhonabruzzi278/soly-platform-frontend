@@ -21,3 +21,6 @@ port = 54324
 
 [realtime]
 enabled = true
+
+[functions.flow-webhook]
+verify_jwt = false

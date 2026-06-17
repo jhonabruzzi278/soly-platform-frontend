@@ -3,6 +3,9 @@
   "buildCommand": "vite build",
   "outputDirectory": "dist",
   "installCommand": "npm install",
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
+  ],
   "headers": [
     {
       "source": "/(.*)",
@@ -29,7 +32,7 @@
         },
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' https://*.supabase.co; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.flow.cl; frame-ancestors 'none'; base-uri 'self'; form-action 'self' https://api.flow.cl; report-uri /api/csp-report"
+          "value": "default-src 'self'; script-src 'self' https://*.supabase.co; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.flow.cl https://sandbox.flow.cl; frame-ancestors 'none'; base-uri 'self'; form-action 'self' https://api.flow.cl https://sandbox.flow.cl; report-uri /api/csp-report"
         },
         {
           "key": "X-XSS-Protection",
