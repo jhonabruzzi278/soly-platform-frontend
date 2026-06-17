@@ -57,6 +57,30 @@ export const NUMERIC_COLUMNS = new Set(['price', 'cost', 'sale_price', 'stock', 
 export const INT_COLUMNS = new Set(['stock', 'min_stock'])
 export const DATE_COLUMNS = new Set(['appointment_date', 'purchase_date'])
 export const TIME_COLUMNS = new Set(['appointment_time'])
+export const EMAIL_COLUMNS = new Set(['email', 'email_alt'])
+export const PHONE_COLUMNS = new Set(['phone', 'phone_alt_1', 'phone_alt_2'])
+
+export function isValidEmail(s: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(s)
+}
+
+export function normalizePhone(raw: string): string {
+  const trimmed = raw.trim()
+  const digits = trimmed.replace(/\D/g, '')
+  if (!digits || digits.length < 7) return trimmed.slice(0, 50)
+
+  let local = digits
+  // Strip international prefix: +56 or 0056 → keep local part
+  if (local.startsWith('56') && local.length >= 10) local = local.slice(2)
+  // Strip leading 0 (some formats: 09XXXXXXXX)
+  if (local.startsWith('0') && local.length >= 9) local = local.slice(1)
+  // Chilean local: 8 or 9 digits. Mobile starts with 9 (8 digits after stripping 9 prefix → pad)
+  if (local.length === 8 && !local.startsWith('2')) local = '9' + local
+
+  if (local.length >= 8 && local.length <= 9) return `+56${local}`
+  // Fallback: return cleaned original
+  return trimmed.slice(0, 50)
+}
 
 export const normHeader = (s: string): string =>
   String(s).toLowerCase().trim()
@@ -163,6 +187,12 @@ export function coerceRow(
       const t = toTime(rawVal)
       if (!t) { errors.push(`Fila ${rowIndex}: hora no reconocida "${str.slice(0, 30)}"`); return null }
       out[target] = t
+    } else if (EMAIL_COLUMNS.has(target)) {
+      const lower = str.toLowerCase().trim()
+      // Skip fields with invalid email format — keep the row but omit the bad value
+      if (isValidEmail(lower)) out[target] = lower.slice(0, 255)
+    } else if (PHONE_COLUMNS.has(target)) {
+      out[target] = normalizePhone(str)
     } else if (target === 'status') {
       out[target] = STATUS_MAP[normHeader(str)] ?? 'completed'
     } else if (target === 'tags') {

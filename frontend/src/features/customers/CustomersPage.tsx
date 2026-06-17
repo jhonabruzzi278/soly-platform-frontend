@@ -82,7 +82,7 @@ export const CustomersPage = () => {
     { key: "email", title: "Email", render: (r: Customer) => r.email ?? "-" },
     { key: "phone", title: "Telefono", render: (r: Customer) => r.phone ?? "-" },
     { key: "total_spent", title: "Total gastado", render: (r: Customer) => currency(r.total_spent) },
-    { key: "total_appointments", title: "Citas", render: (r: Customer) => String(r.total_appointments) },
+    { key: "total_appointments", title: "Citas", render: (r: Customer) => String(r.total_appointments ?? 0) },
     { key: "last_appointment", title: "Ultima cita", render: (r: Customer) => shortDate(r.last_appointment_at) },
     {
       key: "actions", title: "Acciones",
