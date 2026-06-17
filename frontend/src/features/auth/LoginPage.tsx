@@ -1,5 +1,5 @@
 ﻿import { FormEvent, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../app/auth";
 import { FormInput } from "../../components/common/FormInput";
 import { MaterialIcon } from "../../components/common/MaterialIcon";
@@ -11,7 +11,9 @@ type Tab = "login" | "signup";
 export const LoginPage = () => {
   const { login, signup } = useAuth();
   const navigate = useNavigate();
-  const [tab, setTab] = useState<Tab>("login");
+  const [searchParams] = useSearchParams();
+  const redirectTo = searchParams.get("redirect") ?? "/dashboard";
+  const [tab, setTab] = useState<Tab>(searchParams.get("tab") === "signup" ? "signup" : "login");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -44,7 +46,7 @@ export const LoginPage = () => {
     setLoading(true); setError(null);
     try {
       await login({ email, password });
-      navigate("/dashboard", { replace: true });
+      navigate(redirectTo, { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al ingresar.");
     } finally {
@@ -68,7 +70,7 @@ export const LoginPage = () => {
     try {
       await signup({ email: sEmail, password: sPassword, name: sName, businessName: sBusiness });
       setSuccess("Cuenta creada. Redirigiendo...");
-      setTimeout(() => navigate("/dashboard", { replace: true }), 500);
+      setTimeout(() => navigate(redirectTo, { replace: true }), 500);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al crear cuenta.");
     } finally {

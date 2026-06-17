@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useAuth } from "../../app/auth";
 import { createFlowSubscription, cancelFlowSubscription, fetchUserSubscription } from "../../lib/api";
@@ -47,10 +47,12 @@ const TRIAL_DAYS = 14;
 export const BillingPage = () => {
   const { session } = useAuth();
   const [searchParams] = useSearchParams();
+  const skipTrialParam = searchParams.get("skipTrial") === "1";
   const [loading, setLoading] = useState<string | null>(null);
   const [message, setMessage] = useState<{ tone: "default" | "danger"; title: string; description: string } | null>(null);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [subLoading, setSubLoading] = useState(true);
+  const autoTriggeredRef = useRef(false);
 
   const loadSubscription = useCallback(async () => {
     if (!session?.userId) { setSubLoading(false); return; }
@@ -76,16 +78,15 @@ export const BillingPage = () => {
     }
   }, [searchParams]);
 
-  const handleSubscribe = async () => {
-    setLoading("subscribe");
+  const handleSubscribe = async (skipTrial = false) => {
+    setLoading(skipTrial ? "pay" : "subscribe");
     setMessage(null);
     try {
-      const { url } = await createFlowSubscription("business");
+      const { url } = await createFlowSubscription("business", skipTrial);
       if (url) {
         window.location.href = url;
       } else {
-        // Trial subscription: Flow activates it directly, no payment redirect needed
-        window.location.href = window.location.pathname + "?billing=success";
+        window.location.href = window.location.pathname.replace(/\?.*/, "") + "?billing=success";
       }
     } catch (err) {
       setMessage({ tone: "danger", title: "Error", description: err instanceof Error ? err.message : "No se pudo iniciar el pago." });
@@ -93,6 +94,17 @@ export const BillingPage = () => {
       setLoading(null);
     }
   };
+
+  const isActive = subscription?.status === "active" || subscription?.status === "trialing";
+
+  useEffect(() => {
+    if (!subLoading && skipTrialParam && !isActive && !autoTriggeredRef.current) {
+      autoTriggeredRef.current = true;
+      void handleSubscribe(true);
+    }
+  // handleSubscribe is stable within a render; autoTriggeredRef prevents re-fire
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subLoading, skipTrialParam, isActive]);
 
   const handleCancel = async () => {
     if (!subscription) return;
@@ -112,7 +124,6 @@ export const BillingPage = () => {
   const planMeta = PLAN_META.business;
   const limits = PLAN_LIMITS.business;
   const statusInfo = subscription?.status ? STATUS_CONFIG[subscription.status] : null;
-  const isActive = subscription?.status === "active" || subscription?.status === "trialing";
 
   const getTrialDaysLeft = () => {
     if (!subscription?.trial_ends_at) return null;
@@ -255,28 +266,51 @@ export const BillingPage = () => {
               </li>
             </ul>
 
-            {/* CTA */}
-            <Button
-              onClick={() => void handleSubscribe()}
-              disabled={loading !== null}
-              variant="default"
-              className="w-full h-12 text-base font-semibold gap-2"
-            >
-              {loading === "subscribe" ? (
-                <>
-                  <MaterialIcon name="progress_activity" size={18} className="animate-spin" />
-                  Procesando...
-                </>
-              ) : (
-                <>
-                  <MaterialIcon name="credit_card" size={18} />
-                  Comenzar prueba gratis
-                </>
-              )}
-            </Button>
+            {/* CTAs */}
+            <div className="space-y-3">
+              {/* Direct pay — destacado si viene desde landing con skipTrial */}
+              <Button
+                onClick={() => void handleSubscribe(true)}
+                disabled={loading !== null}
+                variant="default"
+                className="w-full h-12 text-base font-semibold gap-2"
+              >
+                {loading === "pay" ? (
+                  <>
+                    <MaterialIcon name="progress_activity" size={18} className="animate-spin" />
+                    Procesando...
+                  </>
+                ) : (
+                  <>
+                    <MaterialIcon name="credit_card" size={18} />
+                    Pagar ahora · $49.000/mes
+                  </>
+                )}
+              </Button>
+
+              {/* Trial CTA */}
+              <Button
+                onClick={() => void handleSubscribe(false)}
+                disabled={loading !== null}
+                variant="outline"
+                className="w-full h-11 font-semibold gap-2 text-[var(--primary)] border-[var(--primary)]/40 hover:border-[var(--primary)]/70 hover:bg-[var(--primary)]/5"
+              >
+                {loading === "subscribe" ? (
+                  <>
+                    <MaterialIcon name="progress_activity" size={16} className="animate-spin" />
+                    Procesando...
+                  </>
+                ) : (
+                  <>
+                    <MaterialIcon name="card_giftcard" size={16} />
+                    Probar gratis {TRIAL_DAYS} días
+                  </>
+                )}
+              </Button>
+            </div>
 
             <p className="text-center text-xs text-[var(--muted-foreground)]">
-              Sin cargo durante {TRIAL_DAYS} días · Cancela cuando quieras
+              Prueba sin tarjeta · Cancela cuando quieras
             </p>
           </div>
         </div>

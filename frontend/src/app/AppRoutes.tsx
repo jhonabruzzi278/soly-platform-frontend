@@ -7,6 +7,7 @@ import { ErrorBoundary } from "../components/common/ErrorBoundary";
 import { FeatureGate } from "../components/common/FeatureGate";
 import { LoginPage } from "../features/auth/LoginPage";
 import { PasswordRecoveryPage } from "../features/auth/PasswordRecoveryPage";
+import { LandingPage } from "../features/landing/LandingPage";
 import { DashboardPage } from "../features/dashboard/DashboardPage";
 import { Profile } from "../lib/types";
 
@@ -59,12 +60,13 @@ export const AppRoutes = () => {
   return (
     <ErrorBoundary>
     <Routes>
+      <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/recuperar-password" element={<PasswordRecoveryPage />} />
 
       <Route element={<RequireAuth />}>
         <Route element={<TenantLayout />}>
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/inicio" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/archivos" element={<ExcelUploadPage />} />
           <Route path="/clientes" element={<FeatureGate feature="customers"><CustomersPage /></FeatureGate>} />
