@@ -1,7 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { getCorsHeaders, handleCorsOptions } from '../_shared/cors.ts'
 import { applyRateLimit } from '../_shared/rate-limit.ts'
-import { flowPost } from '../_shared/flow.ts'
+import { flowPost, FlowSubscription } from '../_shared/flow.ts'
 
 Deno.serve(async (req) => {
   const corsResponse = handleCorsOptions(req)
@@ -40,25 +40,28 @@ Deno.serve(async (req) => {
     const flowApiKey = Deno.env.get('FLOW_API_KEY')
     const flowSecretKey = Deno.env.get('FLOW_SECRET_KEY')
 
-    // Cancel in Flow for recurring subscriptions.
-    // Direct-pay subscriptions (created via /payment/create) store a commerceOrder
-    // in provider_subscription_id, not a Flow subscription ID — /subscription/cancel
-    // will reject those, so we catch the error and proceed to cancel in DB regardless.
-    if (
+    // Cancel in Flow only for proper recurring subscriptions (provider_subscription_id
+    // starts with "sus_" per Flow's format). Direct-pay rows store a commerceOrder
+    // (hex string) which cannot be cancelled via /subscription/cancel — we skip that
+    // call and just mark cancelled in our DB.
+    const isFlowSubscription =
       subscription.provider === 'flow' &&
-      subscription.provider_subscription_id &&
+      typeof subscription.provider_subscription_id === 'string' &&
+      subscription.provider_subscription_id.startsWith('sus_') &&
       flowApiKey &&
       flowSecretKey
-    ) {
+
+    if (isFlowSubscription) {
       try {
-        await flowPost(
+        await flowPost<FlowSubscription>(
           '/subscription/cancel',
           { subscriptionId: subscription.provider_subscription_id },
-          flowApiKey,
-          flowSecretKey
+          flowApiKey!,
+          flowSecretKey!
         )
       } catch (flowError) {
-        console.warn('[flow-cancel] Flow cancel failed (may be a one-time payment):', flowError instanceof Error ? flowError.message : flowError)
+        // Log but don't block DB cancellation — the user's intent is to cancel
+        console.warn('[flow-cancel] Flow API cancel failed:', flowError instanceof Error ? flowError.message : flowError)
       }
     }
 

@@ -2,24 +2,18 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { getCorsHeaders, handleCorsOptions } from '../_shared/cors.ts'
 import { applyRateLimit } from '../_shared/rate-limit.ts'
 import { stripUndefined } from '../_shared/utils.ts'
-import { flowGet } from '../_shared/flow.ts'
+import { flowGet, FlowPaymentStatus } from '../_shared/flow.ts'
 
-// Flow sends a POST to this URL with a `token` param (form-encoded) when a payment is processed.
-// We verify via /payment/getStatus and update the subscription accordingly.
-// Status codes: 1=pending, 2=paid, 3=rejected, 4=cancelled
-
-type FlowPaymentStatus = {
-  flowOrder: number
-  commerceOrder: string
-  requestDate: string
-  status: number
-  subject: string
-  currency: string
-  amount: number
-  payer: string
-  optional: Record<string, string> | null
-  paymentData: Record<string, unknown> | null
-}
+// Flow calls this URL via POST with a `token` param (form-encoded) after any payment event.
+// We call /payment/getStatus to verify, then update the matching subscription.
+//
+// Payment status codes: 1=pending, 2=paid, 3=rejected, 4=cancelled
+//
+// Subscription lookup order:
+//   1. By commerceOrder → provider_subscription_id (direct-pay via /payment/create)
+//   2. By payer email → most recent active/trialing/pending_payment subscription
+//
+// This webhook must return HTTP 200 always. Flow retries on non-200 responses.
 
 Deno.serve(async (req) => {
   const corsResponse = handleCorsOptions(req)
@@ -32,7 +26,6 @@ Deno.serve(async (req) => {
 
     const flowApiKey = Deno.env.get('FLOW_API_KEY')
     const flowSecretKey = Deno.env.get('FLOW_SECRET_KEY')
-
     if (!flowApiKey || !flowSecretKey) throw new Error('Flow no configurado')
 
     // Flow sends form-encoded POST with `token` param
@@ -49,7 +42,7 @@ Deno.serve(async (req) => {
 
     if (!token) throw new Error('Missing token')
 
-    // Verify with Flow — this is the source of truth
+    // Verify with Flow — this is the source of truth for payment status
     const payment = await flowGet<FlowPaymentStatus>(
       '/payment/getStatus',
       { token },
@@ -62,7 +55,8 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    const eventType = payment.status === 2 ? 'payment.paid'
+    const eventType =
+      payment.status === 2 ? 'payment.paid'
       : payment.status === 3 ? 'payment.rejected'
       : payment.status === 4 ? 'payment.cancelled'
       : 'payment.pending'
@@ -84,10 +78,11 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Find subscription: first by commerceOrder (direct-pay flow), then by payer email (fallback)
+    // ── Find matching subscription ────────────────────────────────────────────
+    // Strategy 1: match by commerceOrder stored in provider_subscription_id.
+    // This covers payments created via /payment/create (skipTrial=true flow).
     let dbSubscription: Record<string, unknown> | null = null
 
-    // For /payment/create flow, provider_subscription_id holds the commerceOrder
     if (payment.commerceOrder) {
       const { data: sub } = await supabaseAdmin
         .from('subscriptions')
@@ -98,7 +93,9 @@ Deno.serve(async (req) => {
       dbSubscription = sub
     }
 
-    // Fallback: find by payer email for trial subscriptions
+    // Strategy 2: match by payer email → most recent subscription for that user.
+    // Fallback for recurring subscription charges where provider_subscription_id
+    // holds a Flow subscriptionId (sus_xxx), not the commerceOrder.
     if (!dbSubscription && payment.payer) {
       const { data: profile } = await supabaseAdmin
         .from('profiles')
@@ -120,17 +117,18 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Log the event regardless of whether we found the subscription
     const { error: insertError } = await supabaseAdmin
       .from('billing_webhook_events')
       .insert(stripUndefined({
         provider: 'flow',
         event_type: eventType,
         raw_payload: payment as unknown as Record<string, unknown>,
-        subscription_id: dbSubscription?.id as string ?? null,
-        processed: false
+        subscription_id: (dbSubscription?.id as string) ?? null,
+        processed: false,
       }))
 
-    // Duplicate at DB level (race condition) — treat as success
+    // Duplicate event at DB level (race condition) — treat as success
     if (insertError && insertError.code === '23505') {
       return new Response(
         JSON.stringify({ received: true, duplicate: true }),
@@ -139,25 +137,48 @@ Deno.serve(async (req) => {
     }
     if (insertError) throw insertError
 
-    // Update subscription based on payment status
+    // ── Update subscription based on payment result ───────────────────────────
     if (dbSubscription) {
+      const subId = dbSubscription.id as string
+
       if (payment.status === 2) {
-        // Paid: activate for 30 days (Flow will send next charge webhook monthly)
+        // Paid: activate for 30 days. For recurring subscriptions, Flow will send
+        // the next webhook when the next invoice is charged.
+        const now = new Date()
+        const periodEnd = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
         await supabaseAdmin
           .from('subscriptions')
           .update({
             status: 'active',
-            current_period_start: new Date().toISOString(),
-            current_period_end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+            current_period_start: now.toISOString(),
+            current_period_end: periodEnd.toISOString(),
+            trial_ends_at: null,
           })
-          .eq('id', dbSubscription.id as string)
+          .eq('id', subId)
+
+        // Sync tenant plan to match the paid subscription
+        const { data: membership } = await supabaseAdmin
+          .from('memberships')
+          .select('tenant_id')
+          .eq('user_id', dbSubscription.user_id as string)
+          .eq('role', 'owner')
+          .limit(1)
+          .maybeSingle()
+
+        if (membership?.tenant_id) {
+          await supabaseAdmin
+            .from('tenants')
+            .update({ plan: dbSubscription.plan as string, updated_at: now.toISOString() })
+            .eq('id', membership.tenant_id)
+        }
       } else if (payment.status === 3 || payment.status === 4) {
-        // Rejected or cancelled
+        // Rejected or cancelled — mark expired, user will need to retry
         await supabaseAdmin
           .from('subscriptions')
           .update({ status: 'expired' })
-          .eq('id', dbSubscription.id as string)
+          .eq('id', subId)
       }
+      // status=1 (pending): no DB update needed, still waiting for final payment
     }
 
     // Mark event as processed
@@ -173,9 +194,9 @@ Deno.serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     )
   } catch (error) {
-    // Always return 200 to Flow so it doesn't retry indefinitely
+    // Always return 200 so Flow doesn't retry indefinitely
     const message = error instanceof Error ? error.message : 'Unknown error'
-    console.error('flow-webhook error:', message)
+    console.error('[flow-webhook] error:', message)
     return new Response(
       JSON.stringify({ error: 'Webhook processing failed' }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
