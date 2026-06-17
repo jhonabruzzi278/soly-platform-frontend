@@ -7,7 +7,6 @@ import { Subscription } from "../../lib/types";
 import { SurfaceMessage } from "../../components/common/SurfaceMessage";
 import { MaterialIcon } from "../../components/common/MaterialIcon";
 import { Button } from "../../components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
 
 const PLAN_FEATURES = [
   "Hasta 20 usuarios",
@@ -17,15 +16,33 @@ const PLAN_FEATURES = [
   "Reportes y KPIs",
   "Inventario",
   "Dashboard avanzado",
-  "Soporte prioritario"
+  "Soporte prioritario",
 ];
 
-const STATUS_LABELS: Record<string, { label: string; tone: "default" | "success" | "warning" | "danger" }> = {
-  active: { label: "Activa", tone: "success" },
-  trialing: { label: "En prueba", tone: "warning" },
-  cancelled: { label: "Cancelada", tone: "danger" },
-  expired: { label: "Expirada", tone: "danger" }
+const STATUS_CONFIG: Record<string, { label: string; icon: string; cls: string }> = {
+  active: {
+    label: "Activa",
+    icon: "check_circle",
+    cls: "text-[var(--success)] bg-[var(--success)]/10 border-[var(--success)]/25",
+  },
+  trialing: {
+    label: "En prueba",
+    icon: "schedule",
+    cls: "text-amber-600 bg-amber-50 border-amber-200 dark:text-amber-400 dark:bg-amber-900/20 dark:border-amber-800",
+  },
+  cancelled: {
+    label: "Cancelada",
+    icon: "cancel",
+    cls: "text-[var(--destructive)] bg-[var(--destructive)]/8 border-[var(--destructive)]/20",
+  },
+  expired: {
+    label: "Expirada",
+    icon: "timer_off",
+    cls: "text-[var(--muted-foreground)] bg-[var(--muted)] border-[var(--border)]",
+  },
 };
+
+const TRIAL_DAYS = 14;
 
 export const BillingPage = () => {
   const { session } = useAuth();
@@ -52,10 +69,10 @@ export const BillingPage = () => {
   useEffect(() => {
     const status = searchParams.get("billing");
     if (status === "success") {
-      setMessage({ tone: "default", title: "Suscripcion activada!", description: "Tu plan fue actualizado." });
+      setMessage({ tone: "default", title: "Suscripción activada", description: "Tu plan fue actualizado correctamente." });
       void loadSubscription();
     } else if (status === "cancelled") {
-      setMessage({ tone: "default", title: "Operacion cancelada", description: "No se realizo ningun cargo." });
+      setMessage({ tone: "default", title: "Operación cancelada", description: "No se realizó ningún cargo." });
     }
   }, [searchParams]);
 
@@ -64,7 +81,12 @@ export const BillingPage = () => {
     setMessage(null);
     try {
       const { url } = await createFlowSubscription("business");
-      window.location.href = url;
+      if (url) {
+        window.location.href = url;
+      } else {
+        // Trial subscription: Flow activates it directly, no payment redirect needed
+        window.location.href = window.location.pathname + "?billing=success";
+      }
     } catch (err) {
       setMessage({ tone: "danger", title: "Error", description: err instanceof Error ? err.message : "No se pudo iniciar el pago." });
     } finally {
@@ -74,11 +96,11 @@ export const BillingPage = () => {
 
   const handleCancel = async () => {
     if (!subscription) return;
-    if (!window.confirm("Cancelar tu suscripcion? Perderas el acceso al fin del periodo.")) return;
+    if (!window.confirm("¿Cancelar tu suscripción? Perderás el acceso al final del período activo.")) return;
     setLoading("cancel");
     try {
       await cancelFlowSubscription(subscription.id);
-      setMessage({ tone: "default", title: "Cancelada", description: "Tu cuenta quedara inactiva al final del periodo." });
+      setMessage({ tone: "default", title: "Suscripción cancelada", description: "Tu cuenta quedará inactiva al final del período." });
       await loadSubscription();
     } catch (err) {
       setMessage({ tone: "danger", title: "Error", description: err instanceof Error ? err.message : "No se pudo cancelar." });
@@ -89,133 +111,202 @@ export const BillingPage = () => {
 
   const planMeta = PLAN_META.business;
   const limits = PLAN_LIMITS.business;
-  const statusInfo = subscription?.status ? STATUS_LABELS[subscription.status] : null;
+  const statusInfo = subscription?.status ? STATUS_CONFIG[subscription.status] : null;
   const isActive = subscription?.status === "active" || subscription?.status === "trialing";
 
   const getTrialDaysLeft = () => {
     if (!subscription?.trial_ends_at) return null;
-    const now = new Date();
-    const trialEnd = new Date(subscription.trial_ends_at);
-    const diffMs = trialEnd.getTime() - now.getTime();
-    const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-    return diffDays > 0 ? diffDays : 0;
+    const diff = new Date(subscription.trial_ends_at).getTime() - Date.now();
+    return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
   };
 
   const trialDaysLeft = getTrialDaysLeft();
+  const trialProgress = trialDaysLeft !== null ? Math.min(100, (trialDaysLeft / TRIAL_DAYS) * 100) : 0;
+
+  if (subLoading) {
+    return (
+      <div className="max-w-2xl mx-auto space-y-4">
+        <div className="h-8 w-48 rounded-xl bg-[var(--muted)] animate-pulse" />
+        <div className="h-48 rounded-2xl bg-[var(--muted)] animate-pulse" />
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5 max-w-2xl mx-auto">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Planes y facturacion</h1>
-        <p className="mt-1 text-sm text-[var(--muted-foreground)]">Gestiona tu suscripcion via Flow.cl.</p>
+        <h1 className="text-2xl font-semibold tracking-tight text-balance">Plan y facturación</h1>
+        <p className="mt-1 text-sm text-[var(--muted-foreground)]">
+          Gestiona tu suscripción via Flow.cl.
+        </p>
       </div>
 
-      {message ? <SurfaceMessage tone={message.tone} title={message.title} description={message.description} /> : null}
-
-      {!subLoading && subscription ? (
-        <Card className="rounded-xl border border-transparent shadow-[var(--neu-shadow-raised)]">
-          <CardHeader>
-            <CardTitle>Tu suscripcion</CardTitle>
-            <CardDescription>
-              Plan: <strong>{planMeta.label}</strong> ({planMeta.priceLabel})
-              {statusInfo && (
-                <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-[var(--muted)] px-2 py-0.5 text-xs font-medium">
-                  {statusInfo.label}
-                </span>
-              )}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {subscription.status === "trialing" && trialDaysLeft !== null && (
-              <p className="text-sm text-[var(--muted-foreground)]">
-                <MaterialIcon name="schedule" size={14} className="inline mr-1" />
-                {trialDaysLeft > 0 ? `${trialDaysLeft} dias restantes de prueba` : "Prueba finalizada"}
-              </p>
-            )}
-            {subscription.current_period_end && subscription.status === "active" && (
-              <p className="text-sm text-[var(--muted-foreground)]">
-                Proximo cobro: {new Date(subscription.current_period_end).toLocaleDateString("es-CL")}
-              </p>
-            )}
-            {subscription.status !== "cancelled" && (
-              <Button variant="outline" onClick={() => void handleCancel()} disabled={loading === "cancel"}>
-                <MaterialIcon name="cancel" size={18} />
-                {loading === "cancel" ? "Cancelando..." : "Cancelar suscripcion"}
-              </Button>
-            )}
-          </CardContent>
-        </Card>
+      {message ? (
+        <SurfaceMessage tone={message.tone} title={message.title} description={message.description} />
       ) : null}
 
-      {!isActive && (
-        <Card className="relative rounded-xl border border-[var(--primary)]/50 shadow-[var(--neu-shadow-raised)]">
-          <div className="absolute -top-2 left-1/2 -translate-x-1/2 rounded-full bg-[var(--primary)] px-3 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
-            Plan unico
-          </div>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-xl">{planMeta.label}</CardTitle>
+      {/* Active subscription */}
+      {subscription && isActive ? (
+        <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] shadow-[var(--neu-shadow-raised)] p-5 space-y-4 animate-in">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-widest text-[var(--muted-foreground)]">Suscripción actual</p>
+              <p className="mt-1 text-lg font-semibold">{planMeta.label}</p>
+              <p className="text-sm text-[var(--muted-foreground)]">{planMeta.priceLabel} / mes</p>
             </div>
-            <p className="mt-1 text-3xl font-bold">{planMeta.priceLabel}</p>
-            <CardDescription className="mt-2 text-sm">{planMeta.description}</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <ul className="space-y-2 text-sm">
+            {statusInfo ? (
+              <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${statusInfo.cls}`}>
+                <MaterialIcon name={statusInfo.icon} size={12} />
+                {statusInfo.label}
+              </span>
+            ) : null}
+          </div>
+
+          {subscription.status === "trialing" && trialDaysLeft !== null ? (
+            <div>
+              <div className="mb-1.5 flex justify-between text-xs">
+                <span className="text-[var(--muted-foreground)]">Período de prueba</span>
+                <span className="font-medium tabular-nums text-amber-600 dark:text-amber-400">
+                  {trialDaysLeft > 0 ? `${trialDaysLeft} días restantes` : "Prueba finalizada"}
+                </span>
+              </div>
+              <div className="h-1.5 rounded-full bg-[var(--muted)] overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-amber-400 transition-all duration-700 ease-out"
+                  style={{ width: `${trialProgress}%` }}
+                />
+              </div>
+              <p className="mt-1.5 text-xs text-[var(--muted-foreground)]">
+                Flow enviará un email para registrar tu método de pago antes del vencimiento.
+              </p>
+            </div>
+          ) : null}
+
+          {subscription.current_period_end && subscription.status === "active" ? (
+            <p className="flex items-center gap-1.5 text-sm text-[var(--muted-foreground)]">
+              <MaterialIcon name="autorenew" size={14} />
+              Próximo cobro:{" "}
+              <span className="font-medium tabular-nums text-[var(--foreground)]">
+                {new Date(subscription.current_period_end).toLocaleDateString("es-CL", {
+                  day: "numeric",
+                  month: "long",
+                  year: "numeric",
+                })}
+              </span>
+            </p>
+          ) : null}
+
+          {subscription.status !== "cancelled" ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void handleCancel()}
+              disabled={loading === "cancel"}
+              className="text-[var(--destructive)] border-[var(--destructive)]/30 hover:bg-[var(--destructive)]/5 hover:border-[var(--destructive)]/50"
+            >
+              <MaterialIcon name="cancel" size={16} />
+              {loading === "cancel" ? "Cancelando..." : "Cancelar suscripción"}
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
+
+      {/* Plan card — shown only when not active */}
+      {!isActive ? (
+        <div className="relative rounded-2xl border-2 border-[var(--primary)]/50 bg-[var(--card)] shadow-[var(--neu-shadow-raised)] overflow-hidden animate-in">
+          <div className="bg-[var(--primary)] px-4 py-2.5 text-center">
+            <span className="text-xs font-bold uppercase tracking-widest text-[var(--primary-foreground)]">
+              Plan único · Todo incluido
+            </span>
+          </div>
+
+          <div className="p-6 space-y-5">
+            {/* Price hero */}
+            <div className="flex items-end gap-3">
+              <p className="text-5xl font-bold tracking-tight tabular-nums">$49.000</p>
+              <div className="pb-1 text-sm text-[var(--muted-foreground)] leading-snug">
+                CLP<br />/ mes
+              </div>
+            </div>
+
+            {/* Trial pill */}
+            <div className="inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 dark:border-amber-800 dark:bg-amber-900/20">
+              <MaterialIcon name="card_giftcard" size={16} className="text-amber-600 dark:text-amber-400" />
+              <p className="text-sm font-semibold text-amber-700 dark:text-amber-300">
+                {TRIAL_DAYS} días de prueba gratis — sin tarjeta requerida
+              </p>
+            </div>
+
+            {/* Features */}
+            <ul className="grid grid-cols-1 gap-y-2.5 sm:grid-cols-2 sm:gap-x-6">
               {PLAN_FEATURES.map((feature, i) => (
-                <li key={i} className="flex items-start gap-2">
-                  <MaterialIcon name="check_circle" size={14} className="mt-0.5 text-[var(--primary)]" />
+                <li key={i} className="flex items-center gap-2.5 text-sm">
+                  <MaterialIcon name="check" size={14} className="shrink-0 text-[var(--primary)]" />
                   <span>{feature}</span>
                 </li>
               ))}
-              <li className="flex items-start gap-2">
-                <MaterialIcon name="group" size={14} className="mt-0.5 text-[var(--muted-foreground)]" />
-                <span className="text-[var(--muted-foreground)]">
-                  Hasta {limits.seats} usuarios
-                </span>
+              <li className="flex items-center gap-2.5 text-sm text-[var(--muted-foreground)]">
+                <MaterialIcon name="group" size={14} className="shrink-0" />
+                <span>Hasta {limits.seats} usuarios</span>
               </li>
-              <li className="flex items-start gap-2">
-                <MaterialIcon name="folder" size={14} className="mt-0.5 text-[var(--muted-foreground)]" />
-                <span className="text-[var(--muted-foreground)]">
-                  Hasta {limits.files.toLocaleString()} archivos
-                </span>
+              <li className="flex items-center gap-2.5 text-sm text-[var(--muted-foreground)]">
+                <MaterialIcon name="folder" size={14} className="shrink-0" />
+                <span>Hasta {limits.files.toLocaleString()} archivos</span>
               </li>
             </ul>
+
+            {/* CTA */}
             <Button
               onClick={() => void handleSubscribe()}
               disabled={loading !== null}
               variant="default"
-              className="w-full"
+              className="w-full h-12 text-base font-semibold gap-2"
             >
-              {loading === "subscribe" ? "Procesando..." : "Suscribirse"}
+              {loading === "subscribe" ? (
+                <>
+                  <MaterialIcon name="progress_activity" size={18} className="animate-spin" />
+                  Procesando...
+                </>
+              ) : (
+                <>
+                  <MaterialIcon name="credit_card" size={18} />
+                  Comenzar prueba gratis
+                </>
+              )}
             </Button>
-          </CardContent>
-        </Card>
-      )}
 
-      <Card className="rounded-xl border border-transparent shadow-[var(--neu-shadow-raised)]">
-        <CardHeader>
-          <CardTitle>Pagos seguros via Flow.cl</CardTitle>
-          <CardDescription>
-            Flow.cl es la pasarela de pagos lider en Chile. Acepta tarjetas de credito, debito y transferencias bancarias.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center gap-4 text-sm text-[var(--muted-foreground)]">
-            <div className="flex items-center gap-1">
-              <MaterialIcon name="lock" size={14} />
-              <span>Pagos seguros</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <MaterialIcon name="autorenew" size={14} />
-              <span>Cancela cuando quieras</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <MaterialIcon name="support_agent" size={14} />
-              <span>Soporte en espanol</span>
-            </div>
+            <p className="text-center text-xs text-[var(--muted-foreground)]">
+              Sin cargo durante {TRIAL_DAYS} días · Cancela cuando quieras
+            </p>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      ) : null}
+
+      {/* Trust bar */}
+      <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] shadow-[var(--neu-shadow-raised)] p-4">
+        <div className="grid grid-cols-3 divide-x divide-[var(--border)]">
+          <div className="flex flex-col items-center gap-1 px-3 text-center">
+            <MaterialIcon name="lock" size={20} className="text-[var(--primary)]" />
+            <p className="text-xs font-medium">Pago seguro</p>
+            <p className="text-[11px] text-[var(--muted-foreground)]">SSL 256-bit</p>
+          </div>
+          <div className="flex flex-col items-center gap-1 px-3 text-center">
+            <MaterialIcon name="autorenew" size={20} className="text-[var(--primary)]" />
+            <p className="text-xs font-medium">Sin permanencia</p>
+            <p className="text-[11px] text-[var(--muted-foreground)]">Cancela cuando quieras</p>
+          </div>
+          <div className="flex flex-col items-center gap-1 px-3 text-center">
+            <MaterialIcon name="support_agent" size={20} className="text-[var(--primary)]" />
+            <p className="text-xs font-medium">Soporte local</p>
+            <p className="text-[11px] text-[var(--muted-foreground)]">En español · Chile</p>
+          </div>
+        </div>
+        <p className="mt-3 border-t border-[var(--border)] pt-3 text-center text-[11px] text-[var(--muted-foreground)]">
+          Pagos procesados por{" "}
+          <span className="font-semibold text-[var(--foreground)]">Flow.cl</span>
+          {" "}· Pasarela líder en Chile · Acepta tarjetas y transferencias bancarias
+        </p>
+      </div>
     </div>
   );
 };

@@ -195,6 +195,11 @@ textarea {
   transform: translateY(-1px);
 }
 
+.theme-button-primary:active {
+  transform: scale(0.97);
+  opacity: 1;
+}
+
 .theme-button-secondary {
   display: inline-flex;
   align-items: center;
@@ -360,6 +365,16 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb {
 
 ::-webkit-scrollbar-track {
   background: transparent;
+}
+
+/* Tabular numerals for metrics, prices, counters */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Text balance for headings */
+.text-balance {
+  text-wrap: balance;
 }
 
 .sr-only {

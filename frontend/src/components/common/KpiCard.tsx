@@ -23,7 +23,7 @@ export const KpiCard = ({ label, value, helper, icon, compact = false }: KpiCard
           </div>
         ) : null}
       </div>
-      <p className={compact ? "text-[1.2rem] font-semibold tracking-[-0.02em] sm:text-[1.7rem]" : "text-[1.85rem] font-semibold tracking-[-0.03em]"}>
+      <p className={`tabular-nums ${compact ? "text-[1.2rem] font-semibold tracking-[-0.02em] sm:text-[1.7rem]" : "text-[1.85rem] font-semibold tracking-[-0.03em]"}`}>
         {value}
       </p>
       {helper ? (

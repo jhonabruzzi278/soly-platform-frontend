@@ -7,7 +7,7 @@ const VALID_PLANS = ['business'] as const
 const PLAN_AMOUNT: Record<string, string> = { business: '49000' }
 
 type FlowCustomer = { customerId: string }
-type FlowSubscription = { subscriptionId: string; url: string; token: string }
+type FlowSubscription = { subscriptionId: string; url?: string; token?: string }
 
 Deno.serve(async (req) => {
   const corsResponse = handleCorsOptions(req)
@@ -37,7 +37,8 @@ Deno.serve(async (req) => {
 
     const flowApiKey = Deno.env.get('FLOW_API_KEY')
     const flowSecretKey = Deno.env.get('FLOW_SECRET_KEY')
-    const appUrl = Deno.env.get('FLOW_APP_URL')
+    // Support both FLOW_APP_URL (new) and PUBLIC_URL (legacy) for the frontend base URL
+    const appUrl = Deno.env.get('FLOW_APP_URL') ?? Deno.env.get('PUBLIC_URL')
 
     if (!flowApiKey || !flowSecretKey) throw new Error('Pagos no configurados. Contacta soporte.')
     if (!appUrl) throw new Error('FLOW_APP_URL no está configurado')
@@ -89,7 +90,10 @@ Deno.serve(async (req) => {
     // Create Flow subscription
     // Plan must exist in Flow with id = FLOW_PLAN_ID env var (or soly-business-v1 by default).
     // See setup instructions: https://www.flow.cl/app/web/plan/list
-    const flowPlanId = Deno.env.get('FLOW_PLAN_ID') ?? `soly-${plan}-v1`
+    // Support FLOW_BUSINESS_PLAN_ID (legacy) as fallback
+    const flowPlanId = Deno.env.get('FLOW_PLAN_ID')
+      ?? Deno.env.get('FLOW_BUSINESS_PLAN_ID')
+      ?? `soly-${plan}-v1`
     const webhookUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/flow-webhook`
 
     const subscription = await flowPost<FlowSubscription>(
@@ -124,8 +128,10 @@ Deno.serve(async (req) => {
       trial_ends_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString()
     })
 
-    // Subscription URL = base url + token
-    const paymentUrl = `${subscription.url}?token=${subscription.token}`
+    // For trial subscriptions Flow returns no url/token (amount = 0, no payment needed yet)
+    const paymentUrl = subscription.url && subscription.token
+      ? `${subscription.url}?token=${subscription.token}`
+      : null
 
     return new Response(
       JSON.stringify({ url: paymentUrl }),
