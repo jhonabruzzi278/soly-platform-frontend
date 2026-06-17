@@ -172,7 +172,7 @@ Deno.serve(async (req) => {
         amount: PLAN_AMOUNT[validPlan],
         email: user.email ?? '',
         urlConfirmation: webhookUrl,
-        urlReturn: `${appUrl}/billing?billing=success`,
+        urlReturn: `${appUrl}/api/flow-return`,
       },
       flowApiKey,
       flowSecretKey
