@@ -1,5 +1,5 @@
 ﻿import { FormEvent, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../app/auth";
 import { FormInput } from "../../components/common/FormInput";
 import { MaterialIcon } from "../../components/common/MaterialIcon";
@@ -9,11 +9,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../..
 type Tab = "login" | "signup";
 
 export const LoginPage = () => {
-  const { login, signup } = useAuth();
+  const { login, signup, session, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const redirectTo = searchParams.get("redirect") ?? "/dashboard";
   const [tab, setTab] = useState<Tab>(searchParams.get("tab") === "signup" ? "signup" : "login");
+
+  // Already logged in → skip the form and go straight to the intended destination
+  if (!authLoading && session) {
+    return <Navigate to={redirectTo} replace />;
+  }
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
