@@ -1,71 +1,80 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { createHmac, timingSafeEqual } from 'https://deno.land/std@0.177.0/node/crypto.ts'
 import { getCorsHeaders, handleCorsOptions } from '../_shared/cors.ts'
 import { applyRateLimit } from '../_shared/rate-limit.ts'
 import { stripUndefined } from '../_shared/utils.ts'
+import { flowGet } from '../_shared/flow.ts'
+
+// Flow sends a POST to this URL with a `token` param (form-encoded) when a payment is processed.
+// We verify via /payment/getStatus and update the subscription accordingly.
+// Status codes: 1=pending, 2=paid, 3=rejected, 4=cancelled
+
+type FlowPaymentStatus = {
+  flowOrder: number
+  commerceOrder: string
+  requestDate: string
+  status: number
+  subject: string
+  currency: string
+  amount: number
+  payer: string
+  optional: Record<string, string> | null
+  paymentData: Record<string, unknown> | null
+}
 
 Deno.serve(async (req) => {
   const corsResponse = handleCorsOptions(req)
   if (corsResponse) return corsResponse
-
   const corsHeaders = getCorsHeaders(req)
 
   try {
     const rateLimitResponse = await applyRateLimit(req, 'flow-webhook')
     if (rateLimitResponse) return rateLimitResponse
 
-    const body = await req.text()
-    const signature = req.headers.get('X-Flow-Signature')
-
+    const flowApiKey = Deno.env.get('FLOW_API_KEY')
     const flowSecretKey = Deno.env.get('FLOW_SECRET_KEY')
-    if (!flowSecretKey) {
-      throw new Error('Flow secret key not configured')
+
+    if (!flowApiKey || !flowSecretKey) throw new Error('Flow no configurado')
+
+    // Flow sends form-encoded POST with `token` param
+    const contentType = req.headers.get('content-type') ?? ''
+    let token: string | null = null
+
+    if (contentType.includes('application/x-www-form-urlencoded')) {
+      const params = new URLSearchParams(await req.text())
+      token = params.get('token')
+    } else {
+      const body = await req.json() as Record<string, unknown>
+      token = (body.token as string) ?? null
     }
 
-    if (!signature) {
-      throw new Error('Missing webhook signature')
-    }
+    if (!token) throw new Error('Missing token')
 
-    const expected = createHmac('sha256', flowSecretKey).update(body).digest('hex') as string
-    if (
-      signature.length !== expected.length ||
-      !timingSafeEqual(Buffer.from(signature), Buffer.from(expected))
-    ) {
-      throw new Error('Invalid signature')
-    }
-
-    const payload = JSON.parse(body)
-    const eventType = payload.event || payload.type
-    const subscriptionId = payload.subscription_id || payload.data?.subscription_id
-
-    if (!eventType) {
-      throw new Error('Missing event type')
-    }
+    // Verify with Flow — this is the source of truth
+    const payment = await flowGet<FlowPaymentStatus>(
+      '/payment/getStatus',
+      { token },
+      flowApiKey,
+      flowSecretKey
+    )
 
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    let dbSubscription = null
-    if (subscriptionId) {
-      const { data } = await supabaseAdmin
-        .from('subscriptions')
-        .select('*')
-        .eq('provider_subscription_id', subscriptionId)
-        .single()
+    const eventType = payment.status === 2 ? 'payment.paid'
+      : payment.status === 3 ? 'payment.rejected'
+      : payment.status === 4 ? 'payment.cancelled'
+      : 'payment.pending'
 
-      dbSubscription = data
-    }
-
-    // Idempotency: check if we already processed this exact event
+    // Idempotency: skip if this flowOrder was already processed
     const { data: existingEvent } = await supabaseAdmin
       .from('billing_webhook_events')
       .select('id')
       .eq('provider', 'flow')
       .eq('event_type', eventType)
       .eq('processed', true)
-      .filter('raw_payload->>id', 'eq', payload.id || '')
+      .filter('raw_payload->>flowOrder', 'eq', String(payment.flowOrder))
       .maybeSingle()
 
     if (existingEvent) {
@@ -75,67 +84,66 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Insert event record — handle unique constraint violation (idempotency at DB level)
-    const { error: insertError } = await supabaseAdmin.from('billing_webhook_events').insert(stripUndefined({
-      provider: 'flow',
-      event_type: eventType,
-      raw_payload: payload,
-      subscription_id: dbSubscription?.id || null,
-      processed: false
-    }))
+    // Find subscription by payer email
+    // The payer email matches the subscription owner's email
+    let dbSubscription: Record<string, unknown> | null = null
+    if (payment.payer) {
+      // Find the user by email, then their Flow subscription
+      const { data: profile } = await supabaseAdmin
+        .from('profiles')
+        .select('id')
+        .eq('email', payment.payer)
+        .maybeSingle()
 
-    // If unique constraint violation, this is a duplicate event
+      if (profile) {
+        const { data: sub } = await supabaseAdmin
+          .from('subscriptions')
+          .select('*')
+          .eq('user_id', profile.id)
+          .eq('provider', 'flow')
+          .in('status', ['active', 'trialing'])
+          .maybeSingle()
+        dbSubscription = sub
+      }
+    }
+
+    const { error: insertError } = await supabaseAdmin
+      .from('billing_webhook_events')
+      .insert(stripUndefined({
+        provider: 'flow',
+        event_type: eventType,
+        raw_payload: payment as unknown as Record<string, unknown>,
+        subscription_id: dbSubscription?.id as string ?? null,
+        processed: false
+      }))
+
+    // Duplicate at DB level (race condition) — treat as success
     if (insertError && insertError.code === '23505') {
       return new Response(
         JSON.stringify({ received: true, duplicate: true }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
       )
     }
+    if (insertError) throw insertError
 
-    if (insertError) {
-      throw insertError
-    }
-
-    // Extract billing period from Flow payload (or calculate from subscription)
-    const periodStart = payload.current_period_start
-      || payload.data?.current_period_start
-      || payload.billing_period?.start
-      || new Date().toISOString()
-
-    const periodEnd = payload.current_period_end
-      || payload.data?.current_period_end
-      || payload.billing_period?.end
-      || (dbSubscription?.current_period_end
-        ? new Date(new Date(dbSubscription.current_period_end).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString()
-        : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString())
-
-    if (eventType === 'subscription.paid' || eventType === 'payment.completed') {
-      if (dbSubscription) {
+    // Update subscription based on payment status
+    if (dbSubscription) {
+      if (payment.status === 2) {
+        // Paid: activate for 30 days (Flow will send next charge webhook monthly)
         await supabaseAdmin
           .from('subscriptions')
           .update({
             status: 'active',
-            current_period_start: periodStart,
-            current_period_end: periodEnd
+            current_period_start: new Date().toISOString(),
+            current_period_end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
           })
-          .eq('id', dbSubscription.id)
-      }
-    } else if (eventType === 'subscription.failed' || eventType === 'payment.failed') {
-      if (dbSubscription) {
+          .eq('id', dbSubscription.id as string)
+      } else if (payment.status === 3 || payment.status === 4) {
+        // Rejected or cancelled
         await supabaseAdmin
           .from('subscriptions')
           .update({ status: 'expired' })
-          .eq('id', dbSubscription.id)
-      }
-    } else if (eventType === 'subscription.cancelled') {
-      if (dbSubscription) {
-        await supabaseAdmin
-          .from('subscriptions')
-          .update({
-            status: 'cancelled',
-            cancelled_at: new Date().toISOString()
-          })
-          .eq('id', dbSubscription.id)
+          .eq('id', dbSubscription.id as string)
       }
     }
 
@@ -145,19 +153,19 @@ Deno.serve(async (req) => {
       .update({ processed: true, processed_at: new Date().toISOString() })
       .eq('provider', 'flow')
       .eq('event_type', eventType)
-      .eq('processed', false)
-      .filter('raw_payload->>id', 'eq', payload.id || '')
+      .filter('raw_payload->>flowOrder', 'eq', String(payment.flowOrder))
 
     return new Response(
       JSON.stringify({ received: true }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     )
   } catch (error) {
+    // Always return 200 to Flow so it doesn't retry indefinitely
     const message = error instanceof Error ? error.message : 'Unknown error'
-    const status = message.includes('signature') ? 401 : 400
+    console.error('flow-webhook error:', message)
     return new Response(
       JSON.stringify({ error: 'Webhook processing failed' }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     )
   }
 })

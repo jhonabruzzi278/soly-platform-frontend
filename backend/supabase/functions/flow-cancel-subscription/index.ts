@@ -1,18 +1,16 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { getCorsHeaders, handleCorsOptions } from '../_shared/cors.ts'
 import { applyRateLimit } from '../_shared/rate-limit.ts'
+import { flowPost } from '../_shared/flow.ts'
 
 Deno.serve(async (req) => {
   const corsResponse = handleCorsOptions(req)
   if (corsResponse) return corsResponse
-
   const corsHeaders = getCorsHeaders(req)
 
   try {
     const authHeader = req.headers.get('Authorization')
-    if (!authHeader) {
-      throw new Error('Missing authorization header')
-    }
+    if (!authHeader) throw new Error('Missing authorization header')
 
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -21,60 +19,40 @@ Deno.serve(async (req) => {
     )
 
     const { data: { user } } = await supabaseClient.auth.getUser()
-    if (!user) {
-      throw new Error('Unauthorized')
-    }
+    if (!user) throw new Error('Unauthorized')
 
     const rateLimitResponse = await applyRateLimit(req, 'flow-cancel-subscription', user.id)
     if (rateLimitResponse) return rateLimitResponse
 
     const { subscription_id } = await req.json()
-    if (!subscription_id) {
-      throw new Error('Missing subscription_id')
-    }
+    if (!subscription_id) throw new Error('Missing subscription_id')
 
     const { data: subscription, error: subError } = await supabaseClient
       .from('subscriptions')
-      .select('*')
+      .select('id, status, provider, provider_subscription_id')
       .eq('id', subscription_id)
       .eq('user_id', user.id)
       .single()
 
-    if (subError || !subscription) {
-      throw new Error('Subscription not found')
-    }
-
-    if (subscription.status === 'cancelled') {
-      throw new Error('Subscription already cancelled')
-    }
+    if (subError || !subscription) throw new Error('Suscripción no encontrada')
+    if (subscription.status === 'cancelled') throw new Error('La suscripción ya está cancelada')
 
     const flowApiKey = Deno.env.get('FLOW_API_KEY')
-    if (!flowApiKey) {
-      throw new Error('Flow.cl not configured')
-    }
+    const flowSecretKey = Deno.env.get('FLOW_SECRET_KEY')
 
-    // Cancel in Flow.cl FIRST — only update local DB if provider succeeds
-    if (subscription.provider_subscription_id) {
-    const flowResponse = await fetch(
-      `https://api.flow.cl/api/v2/subscriptions/${subscription.provider_subscription_id}/cancel`,
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${flowApiKey}`,
-          'Content-Type': 'application/json'
-        }
-      }
-    ).catch((fetchError) => {
-      // Manejar errores de red/DNS específicamente
-      if (fetchError.message.includes('dns') || fetchError.message.includes('network') || fetchError.message.includes('fetch')) {
-        throw new Error('Payment service temporarily unavailable. Please try again in a few minutes.')
-      }
-      throw fetchError
-    })
-
-    if (!flowResponse.ok) {
-      throw new Error('Failed to cancel subscription with payment provider. Please try again.')
-    }
+    // Cancel in Flow first (only real Flow subscriptions, not manual trials)
+    if (
+      subscription.provider === 'flow' &&
+      subscription.provider_subscription_id &&
+      flowApiKey &&
+      flowSecretKey
+    ) {
+      await flowPost(
+        '/subscription/cancel',
+        { subscriptionId: subscription.provider_subscription_id },
+        flowApiKey,
+        flowSecretKey
+      )
     }
 
     const supabaseAdmin = createClient(
@@ -84,26 +62,17 @@ Deno.serve(async (req) => {
 
     await supabaseAdmin
       .from('subscriptions')
-      .update({
-        status: 'cancelled',
-        cancelled_at: new Date().toISOString()
-      })
+      .update({ status: 'cancelled', cancelled_at: new Date().toISOString() })
       .eq('id', subscription_id)
 
     return new Response(
       JSON.stringify({ success: true }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200,
-      }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     )
   } catch (error) {
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Cancellation failed' }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 400,
-      }
+      JSON.stringify({ error: error instanceof Error ? error.message : 'Error al cancelar' }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
     )
   }
 })
