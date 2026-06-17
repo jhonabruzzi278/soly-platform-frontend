@@ -58,6 +58,7 @@ Deno.serve(async (req) => {
       .in('status', ['active', 'trialing'])
       .maybeSingle()
 
+    // Only block if already active or trialing (not pending_payment — allow retry)
     if (existingSub && existingSub.provider === 'flow') {
       throw new Error(`Ya tienes una suscripción ${existingSub.plan} activa`)
     }
@@ -97,9 +98,9 @@ Deno.serve(async (req) => {
       ?? `soly-${plan}-v1`
     const webhookUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/flow-webhook`
 
-    // skipTrial=true → immediate payment ($49.000), Flow returns a payment URL
-    // skipTrial=false (default) → 14-day trial, $0 invoice, no redirect URL
-    const trialDays = skipTrial ? '0' : '14'
+    // skipTrial=true → trialPeriodDays=0 (number), Flow charges immediately and returns url+token
+    // skipTrial=false → trialPeriodDays=14, $0 invoice, no payment redirect needed
+    const trialDays = skipTrial ? 0 : 14
 
     const subscription = await flowPost<FlowSubscription>(
       '/subscription/create',
@@ -114,8 +115,7 @@ Deno.serve(async (req) => {
       flowSecretKey
     )
 
-    // Store subscription in DB
-    // If the user had a manual or previous trial, cancel it first.
+    // If the user had a manual trial, cancel it before creating the Flow subscription.
     if (existingSub && existingSub.provider === 'manual') {
       await supabaseAdmin
         .from('subscriptions')
@@ -123,7 +123,14 @@ Deno.serve(async (req) => {
         .eq('id', existingSub.id)
     }
 
-    const initialStatus = skipTrial ? 'active' : 'trialing'
+    const paymentUrl = subscription.url && subscription.token
+      ? `${subscription.url}?token=${subscription.token}`
+      : null
+
+    // For direct pay: insert as 'pending_payment' so the user can retry if they cancel.
+    // The webhook (flow-webhook) updates it to 'active' when Flow confirms the charge.
+    // For trial: insert as 'trialing' immediately (no payment required yet).
+    const initialStatus = skipTrial ? 'pending_payment' : 'trialing'
     const trialEndsAt = skipTrial
       ? null
       : new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString()
@@ -137,12 +144,6 @@ Deno.serve(async (req) => {
       provider_subscription_id: subscription.subscriptionId,
       trial_ends_at: trialEndsAt
     })
-
-    // Direct pay: Flow returns url + token for the payment page
-    // Trial: no url (invoice is $0, no payment needed now)
-    const paymentUrl = subscription.url && subscription.token
-      ? `${subscription.url}?token=${subscription.token}`
-      : null
 
     return new Response(
       JSON.stringify({ url: paymentUrl }),

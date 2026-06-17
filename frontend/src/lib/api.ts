@@ -178,7 +178,7 @@ export const fetchUserSubscription = async (userId: string): Promise<Subscriptio
     .select("*")
     .eq("user_id", userId)
     .eq("product", "soly")
-    .in("status", ["active", "trialing"])
+    .in("status", ["active", "trialing", "pending_payment"])
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();

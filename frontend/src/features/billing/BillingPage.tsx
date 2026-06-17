@@ -40,6 +40,11 @@ const STATUS_CONFIG: Record<string, { label: string; icon: string; cls: string }
     icon: "timer_off",
     cls: "text-[var(--muted-foreground)] bg-[var(--muted)] border-[var(--border)]",
   },
+  pending_payment: {
+    label: "Pago pendiente",
+    icon: "pending",
+    cls: "text-amber-600 bg-amber-50 border-amber-200 dark:text-amber-400 dark:bg-amber-900/20 dark:border-amber-800",
+  },
 };
 
 const TRIAL_DAYS = 14;
@@ -96,15 +101,16 @@ export const BillingPage = () => {
   };
 
   const isActive = subscription?.status === "active" || subscription?.status === "trialing";
+  const isPendingPayment = subscription?.status === "pending_payment";
 
   useEffect(() => {
-    if (!subLoading && skipTrialParam && !isActive && !autoTriggeredRef.current) {
+    if (!subLoading && skipTrialParam && !isActive && !isPendingPayment && !autoTriggeredRef.current) {
       autoTriggeredRef.current = true;
       void handleSubscribe(true);
     }
   // handleSubscribe is stable within a render; autoTriggeredRef prevents re-fire
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [subLoading, skipTrialParam, isActive]);
+  }, [subLoading, skipTrialParam, isActive, isPendingPayment]);
 
   const handleCancel = async () => {
     if (!subscription) return;
@@ -154,6 +160,31 @@ export const BillingPage = () => {
 
       {message ? (
         <SurfaceMessage tone={message.tone} title={message.title} description={message.description} />
+      ) : null}
+
+      {/* Pending payment banner */}
+      {isPendingPayment && subscription ? (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 space-y-3 dark:border-amber-800 dark:bg-amber-900/20 animate-in">
+          <div className="flex items-center gap-3">
+            <MaterialIcon name="pending" size={22} className="shrink-0 text-amber-600 dark:text-amber-400" />
+            <div>
+              <p className="font-semibold text-amber-800 dark:text-amber-300">Pago en proceso</p>
+              <p className="text-sm text-amber-700 dark:text-amber-400">Tu suscripción está esperando confirmación de pago.</p>
+            </div>
+          </div>
+          <Button
+            onClick={() => void handleSubscribe(true)}
+            disabled={loading !== null}
+            variant="default"
+            className="w-full h-11 font-semibold gap-2"
+          >
+            {loading === "pay" ? (
+              <><MaterialIcon name="progress_activity" size={16} className="animate-spin" />Procesando...</>
+            ) : (
+              <><MaterialIcon name="credit_card" size={16} />Reintentar pago · $49.000/mes</>
+            )}
+          </Button>
+        </div>
       ) : null}
 
       {/* Active subscription */}
