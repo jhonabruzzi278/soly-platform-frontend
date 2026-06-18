@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/react";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type PropsWithChildren } from "react";
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { supabase } from "../lib/supabase";
@@ -82,6 +83,14 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const refreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (session) {
+      Sentry.setUser({ id: session.userId, email: session.email, username: session.name });
+    } else {
+      Sentry.setUser(null);
+    }
+  }, [session]);
 
   const loadSessionFromDb = async (user: User | null): Promise<Session | null> => {
     if (!user) return null;

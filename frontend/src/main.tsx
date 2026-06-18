@@ -32,20 +32,40 @@ const queryClient = new QueryClient({
 
 registerSW({ immediate: true, onRegisteredSW() { console.log("SW registrado"); } });
 
+function CrashFallback() {
+  return (
+    <div className="theme-shell grid min-h-screen place-items-center">
+      <div className="text-center space-y-3">
+        <p className="text-lg font-medium text-[var(--foreground)]">Algo salió mal</p>
+        <p className="text-sm text-[var(--muted-foreground)]">El error fue reportado automáticamente.</p>
+        <button
+          type="button"
+          onClick={() => window.location.reload()}
+          className="rounded-lg bg-[var(--primary)] px-4 py-2 text-sm font-medium text-[var(--primary-foreground)]"
+        >
+          Recargar página
+        </button>
+      </div>
+    </div>
+  );
+}
+
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <ThemeProvider>
-      <QueryClientProvider client={queryClient}>
-        <AuthProvider>
-          <TenantProvider>
-            <WorkspaceProvider>
-              <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-                <App />
-              </BrowserRouter>
-            </WorkspaceProvider>
-          </TenantProvider>
-        </AuthProvider>
-      </QueryClientProvider>
+      <Sentry.ErrorBoundary fallback={<CrashFallback />}>
+        <QueryClientProvider client={queryClient}>
+          <AuthProvider>
+            <TenantProvider>
+              <WorkspaceProvider>
+                <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+                  <App />
+                </BrowserRouter>
+              </WorkspaceProvider>
+            </TenantProvider>
+          </AuthProvider>
+        </QueryClientProvider>
+      </Sentry.ErrorBoundary>
     </ThemeProvider>
   </React.StrictMode>
 );
