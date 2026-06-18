@@ -34,7 +34,7 @@ import {
 } from './mapping.ts'
 
 import { deduplicateCustomers } from './importers/customers.ts'
-import { resolveAppointmentCustomers } from './importers/appointments.ts'
+import { resolveAppointmentCustomers, deduplicateAppointments } from './importers/appointments.ts'
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024
 const MAX_ROWS = 10_000
@@ -216,7 +216,10 @@ Deno.serve(async (req) => {
     }
 
     if (table === 'appointments') {
-      preparedRows = await resolveAppointmentCustomers(supabaseAdmin, rows, tenantId)
+      const resolved = await resolveAppointmentCustomers(supabaseAdmin, rows, tenantId)
+      const result = await deduplicateAppointments(supabaseAdmin, resolved, tenantId)
+      preparedRows = result.rows
+      skippedDuplicates = result.skipped
     }
 
     // ---- chunked insert

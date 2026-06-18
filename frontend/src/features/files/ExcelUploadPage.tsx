@@ -293,6 +293,104 @@ export const ExcelUploadPage = () => {
         </p>
       </div>
 
+      {/* ---- Plantillas de ejemplo ---- */}
+      <div className="space-y-3">
+        <p className="text-xs font-semibold uppercase tracking-[0.15em] text-[var(--muted-foreground)]">Plantillas de ejemplo</p>
+        <div className="grid gap-4 sm:grid-cols-2">
+          {/* Clientes */}
+          <div className="rounded-2xl border border-transparent bg-[var(--card)] p-4 shadow-[var(--neu-shadow-raised)] space-y-3">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <p className="text-sm font-semibold">Clientes</p>
+                <p className="mt-0.5 text-xs text-[var(--muted-foreground)]">Columnas reconocidas automáticamente</p>
+              </div>
+              <a
+                href="/plantilla-clientes.csv"
+                download="plantilla-clientes.csv"
+                className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-[var(--primary)] px-3 py-1.5 text-xs font-medium text-[var(--primary-foreground)]"
+              >
+                <MaterialIcon name="download" size={13} />
+                Descargar CSV
+              </a>
+            </div>
+            <div className="overflow-x-auto rounded-xl border border-[var(--border)]/40 bg-[var(--muted)]/20">
+              <table className="w-full text-[11px]">
+                <thead>
+                  <tr className="border-b border-[var(--border)]/40 bg-[var(--muted)]/40">
+                    {["nombre", "email", "telefono", "empresa", "notas"].map((h) => (
+                      <th key={h} className="px-2 py-1.5 text-left font-semibold text-[var(--muted-foreground)] whitespace-nowrap">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {[
+                    ["María González", "maria@ejemplo.cl", "+56912345678", "Peluquería Rosa", "Cliente VIP"],
+                    ["Carlos Pérez", "carlos@ejemplo.cl", "+56987654321", "—", "Primera visita"],
+                    ["Ana Torres", "—", "+56933445566", "Spa Bella", "Fines de semana"],
+                  ].map((row, i) => (
+                    <tr key={i} className="border-t border-[var(--border)]/30">
+                      {row.map((cell, j) => (
+                        <td key={j} className="px-2 py-1.5 text-[var(--muted-foreground)] whitespace-nowrap">{cell}</td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="text-[11px] text-[var(--muted-foreground)]">
+              También se reconocen: <span className="font-medium">correo, celular, whatsapp, empresa, observaciones</span> y más alias.
+            </p>
+          </div>
+
+          {/* Citas */}
+          <div className="rounded-2xl border border-transparent bg-[var(--card)] p-4 shadow-[var(--neu-shadow-raised)] space-y-3">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <p className="text-sm font-semibold">Citas</p>
+                <p className="mt-0.5 text-xs text-[var(--muted-foreground)]">El cliente se crea automáticamente si no existe</p>
+              </div>
+              <a
+                href="/plantilla-citas.csv"
+                download="plantilla-citas.csv"
+                className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-[var(--primary)] px-3 py-1.5 text-xs font-medium text-[var(--primary-foreground)]"
+              >
+                <MaterialIcon name="download" size={13} />
+                Descargar CSV
+              </a>
+            </div>
+            <div className="overflow-x-auto rounded-xl border border-[var(--border)]/40 bg-[var(--muted)]/20">
+              <table className="w-full text-[11px]">
+                <thead>
+                  <tr className="border-b border-[var(--border)]/40 bg-[var(--muted)]/40">
+                    {["cliente", "fecha", "hora", "servicio", "costo", "estado"].map((h) => (
+                      <th key={h} className="px-2 py-1.5 text-left font-semibold text-[var(--muted-foreground)] whitespace-nowrap">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {[
+                    ["María González", "2025-03-15", "10:00", "Corte de cabello", "15000", "completada"],
+                    ["Carlos Pérez",   "2025-03-15", "11:30", "Afeitado clásico",  "8000",  "completada"],
+                    ["Ana Torres",     "2025-03-16", "09:00", "Tintura",           "45000", "pendiente"],
+                  ].map((row, i) => (
+                    <tr key={i} className="border-t border-[var(--border)]/30">
+                      {row.map((cell, j) => (
+                        <td key={j} className="px-2 py-1.5 text-[var(--muted-foreground)] whitespace-nowrap">{cell}</td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="space-y-0.5 text-[11px] text-[var(--muted-foreground)]">
+              <p><span className="font-medium">fecha:</span> AAAA-MM-DD · <span className="font-medium">hora:</span> HH:MM</p>
+              <p><span className="font-medium">estado válidos:</span> pendiente, confirmada, completada, cancelada, no_show</p>
+              <p>Columnas opcionales: <span className="font-medium">atendido_por, comentarios</span></p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {files.isLoading ? (
         <p className="py-8 text-center text-sm text-[var(--muted-foreground)]">Cargando archivos...</p>
       ) : files.error ? (

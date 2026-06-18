@@ -1,0 +1,4 @@
+cliente,fecha,hora,servicio,costo,estado,atendido_por,comentarios
+María González,2025-03-15,10:00,Corte de cabello,15000,completada,Paula,Corte en capas
+Carlos Pérez,2025-03-15,11:30,Afeitado clásico,8000,completada,Pedro,
+Ana Torres,2025-03-16,09:00,Tintura,45000,pendiente,Paula,Color ceniza

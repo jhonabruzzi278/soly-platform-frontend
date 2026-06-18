@@ -1,10 +1,43 @@
 // ============================================================================
-// importers/appointments — Appointment customer resolution logic
+// importers/appointments — Appointment customer resolution + deduplication
 // ============================================================================
 
 import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const INSERT_CHUNK = 500
+
+export async function deduplicateAppointments(
+  supabaseAdmin: SupabaseClient,
+  rows: Record<string, unknown>[],
+  tenantId: string,
+): Promise<{ rows: Record<string, unknown>[]; skipped: number }> {
+  const { data: existing, error } = await supabaseAdmin
+    .from('appointments')
+    .select('customer_id, appointment_date, appointment_time')
+    .eq('tenant_id', tenantId)
+    .limit(20000)
+
+  if (error) throw new Error(`Failed to fetch existing appointments: ${error.message}`)
+
+  const seen = new Set<string>()
+  for (const a of existing ?? []) {
+    seen.add(`${a.customer_id}|${a.appointment_date}|${a.appointment_time}`)
+  }
+
+  let skipped = 0
+  const deduped: Record<string, unknown>[] = []
+  for (const r of rows) {
+    const key = `${r.customer_id}|${r.appointment_date}|${r.appointment_time}`
+    if (seen.has(key)) {
+      skipped++
+      continue
+    }
+    seen.add(key)
+    deduped.push(r)
+  }
+
+  return { rows: deduped, skipped }
+}
 
 export async function resolveAppointmentCustomers(
   supabaseAdmin: SupabaseClient,

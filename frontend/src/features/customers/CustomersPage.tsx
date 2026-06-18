@@ -87,7 +87,7 @@ export const CustomersPage = () => {
   };
 
   const remove = async (id: string, name: string) => {
-    if (!window.confirm(`¿Eliminar a "${name}"?`)) return;
+    if (!window.confirm(`¿Eliminar a "${name}"?\n\nTodas sus citas también se eliminarán. Esta acción no se puede deshacer.`)) return;
     try {
       await deleteCustomer(id);
       setSelectedIds((prev) => { const next = new Set(prev); next.delete(id); return next; });
@@ -98,7 +98,7 @@ export const CustomersPage = () => {
 
   const handleBulkDelete = async () => {
     const ids = [...selectedIds];
-    if (!window.confirm(`¿Eliminar ${ids.length} cliente${ids.length !== 1 ? "s" : ""}? Esta acción no se puede deshacer.`)) return;
+    if (!window.confirm(`¿Eliminar ${ids.length} cliente${ids.length !== 1 ? "s" : ""}?\n\nTodas sus citas también se eliminarán. Esta acción no se puede deshacer.`)) return;
     setFeedback(null);
     try {
       await deleteCustomersBatch(ids);
