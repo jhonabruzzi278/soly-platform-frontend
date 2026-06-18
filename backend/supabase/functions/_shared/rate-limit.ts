@@ -22,12 +22,12 @@ const RATE_LIMITS: Record<string, RateLimitConfig> = {
   'flow-cancel-subscription': { windowMs: 60 * 1000, maxRequests: 5, keyPrefix: 'sub-cancel' },
 }
 
-function getClientIp(req: Request): string {
+function getClientIp(req: Request): string | null {
   return (
     req.headers.get('cf-connecting-ip') ||
     req.headers.get('x-real-ip') ||
     req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-    'unknown'
+    null
   )
 }
 
@@ -42,6 +42,9 @@ export async function checkRateLimit(
   }
 
   const ip = getClientIp(req)
+  if (!ip && !userId) {
+    return { allowed: false, remaining: 0, resetAt: new Date(), retryAfterMs: 60_000 }
+  }
   const key = userId ? `${config.keyPrefix}:${userId}` : `${config.keyPrefix}:ip:${ip}`
   const now = Date.now()
   const windowStart = now - config.windowMs

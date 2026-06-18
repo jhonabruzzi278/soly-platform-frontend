@@ -12,7 +12,8 @@ export const LoginPage = () => {
   const { login, signup, session, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const redirectTo = searchParams.get("redirect") ?? "/dashboard";
+  const _rawRedirect = searchParams.get("redirect") ?? "";
+  const redirectTo = _rawRedirect.startsWith("/") && !_rawRedirect.startsWith("//") ? _rawRedirect : "/dashboard";
 
   // All hooks must be declared before any conditional return
   const [tab, setTab] = useState<Tab>(searchParams.get("tab") === "signup" ? "signup" : "login");

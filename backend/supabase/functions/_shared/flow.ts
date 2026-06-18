@@ -187,7 +187,7 @@ function baseUrl(): string {
     : 'https://www.flow.cl/api'
 }
 
-async function signParams(params: Record<string, string>, secretKey: string): Promise<string> {
+export async function signParams(params: Record<string, string>, secretKey: string): Promise<string> {
   const message = Object.keys(params).sort().map(k => k + params[k]).join('')
   const keyData = new TextEncoder().encode(secretKey)
   const msgData = new TextEncoder().encode(message)

@@ -24,6 +24,10 @@
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.28.0"
   },
+  "overrides": {
+    "undici": ">=7.28.0",
+    "esbuild": ">=0.28.1"
+  },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",

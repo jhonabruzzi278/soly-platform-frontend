@@ -50,6 +50,21 @@ export function applyManualMapping(
   return { mapping, unmapped }
 }
 
+const ALLOWED_AI_BASE_URLS = new Set([
+  'https://api.anthropic.com',
+  'https://api.openai.com',
+  'https://api.openai.com/v1',
+])
+
+function validateAiBaseUrl(url: string | null, defaultUrl: string): string {
+  if (!url) return defaultUrl
+  const normalized = url.replace(/\/+$/, '')
+  if (!ALLOWED_AI_BASE_URLS.has(normalized)) {
+    throw new Error('AI base URL no permitida')
+  }
+  return normalized
+}
+
 export async function aiMapping(
   cfg: AiConfig,
   table: TableName,
@@ -76,7 +91,8 @@ export async function aiMapping(
   let text = ''
   try {
     if (cfg.provider === 'anthropic') {
-      const resp = await fetch(`${cfg.base_url ?? 'https://api.anthropic.com'}/v1/messages`, {
+      const baseUrl = validateAiBaseUrl(cfg.base_url, 'https://api.anthropic.com')
+      const resp = await fetch(`${baseUrl}/v1/messages`, {
         method: 'POST',
         signal: controller.signal,
         headers: {
@@ -95,7 +111,7 @@ export async function aiMapping(
       const data = await resp.json()
       text = data?.content?.[0]?.text ?? ''
     } else {
-      const base = (cfg.base_url ?? 'https://api.openai.com/v1').replace(/\/+$/, '')
+      const base = validateAiBaseUrl(cfg.base_url, 'https://api.openai.com/v1')
       const resp = await fetch(`${base}/chat/completions`, {
         method: 'POST',
         signal: controller.signal,

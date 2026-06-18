@@ -6,6 +6,9 @@ export default defineConfig({
   server: {
     port: 5111
   },
+  build: {
+    sourcemap: false
+  },
   plugins: [
     react(),
     VitePWA({

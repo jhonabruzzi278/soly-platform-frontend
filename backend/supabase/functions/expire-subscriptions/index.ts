@@ -102,7 +102,7 @@ Deno.serve(async (req) => {
     const message = error instanceof Error ? error.message : 'Unknown error'
     const status = message.includes('Unauthorized') ? 401 : 500
     return new Response(
-      JSON.stringify({ error: 'Expiration failed', details: message }),
+      JSON.stringify({ error: 'Expiration failed' }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status }
     )
   }
