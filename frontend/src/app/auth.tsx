@@ -1,5 +1,6 @@
 import * as Sentry from "@sentry/react";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type PropsWithChildren } from "react";
+import { track } from "../lib/monitoring";
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import { fetchUserSession, type UserSession } from "../lib/api";
@@ -94,6 +95,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   const loadSessionFromDb = async (user: User | null): Promise<Session | null> => {
     if (!user) return null;
+    const start = performance.now();
     try {
       // La RPC no puede colgar el login: si tarda más de 6s caemos a metadata.
       const dbSession = await Promise.race([
@@ -101,11 +103,13 @@ export function AuthProvider({ children }: PropsWithChildren) {
         new Promise<never>((_, reject) => setTimeout(() => reject(new Error("session timeout")), 6000))
       ]);
       if (dbSession) {
+        track.sessionLoadTime(Math.round(performance.now() - start), "db");
         return buildSessionFromDb(dbSession);
       }
     } catch {
       // Fall back to metadata if DB call fails
     }
+    track.sessionLoadTime(Math.round(performance.now() - start), "metadata");
     return buildSessionFromMetadata(user);
   };
 
@@ -160,11 +164,13 @@ export function AuthProvider({ children }: PropsWithChildren) {
       const { data, error: loginErr } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
       if (loginErr || !data.session) {
         const msg = translateAuthError(loginErr?.message ?? "Error al iniciar sesion");
+        track.login(false);
         setError(msg); setLoading(false);
         throw new Error(msg);
       }
       const s = await loadSessionFromDb(data.session.user);
       if (!s) { setError("No se pudo iniciar sesion"); setLoading(false); throw new Error("No session"); }
+      track.login(true);
       setSession(s); setLoading(false);
       return s;
     },
@@ -189,6 +195,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       }
       const s = await loadSessionFromDb(loginData.session.user);
       if (!s) throw new Error("No se pudo iniciar sesion");
+      track.signup();
       setSession(s); setLoading(false);
       return s;
     },

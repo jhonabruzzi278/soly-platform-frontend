@@ -1,4 +1,5 @@
 ﻿import { createClient } from "@supabase/supabase-js";
+import { track } from "./monitoring";
 
 export const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 export const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -129,6 +130,7 @@ export const invokeEdgeFunction = async <TBody extends Record<string, unknown>, 
     return { response, parsed };
   };
 
+  const start = performance.now();
   let accessToken = await getAccessToken(false);
   let { response, parsed } = await call(accessToken);
 
@@ -152,6 +154,7 @@ export const invokeEdgeFunction = async <TBody extends Record<string, unknown>, 
   if (!response.ok) {
     const rawMessage = extractApiErrorMessage(parsed, `Edge Function error (${response.status})`);
     const message = toSafeEdgeErrorMessage(response.status, rawMessage);
+    track.edgeFunctionDuration(functionName, Math.round(performance.now() - start), false);
 
     if (response.status === 401 && rawMessage.toLowerCase().includes("invalid jwt")) {
       await supabase.auth.signOut();
@@ -161,6 +164,7 @@ export const invokeEdgeFunction = async <TBody extends Record<string, unknown>, 
     throw new Error(message);
   }
 
+  track.edgeFunctionDuration(functionName, Math.round(performance.now() - start), true);
   return parsed as TResponse;
 };
 

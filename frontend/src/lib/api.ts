@@ -1,5 +1,6 @@
 ﻿import { supabase, supabaseUrl, supabaseAnonKey, invokeEdgeFunction } from "./supabase";
 import { StorageFile, Tenant, Membership, InviteMemberPayload, DashboardKpi, Customer, AppointmentEnriched, Subscription } from "./types";
+import { track } from "./monitoring";
 
 const BUCKET_NAME = import.meta.env.VITE_SUPABASE_BUCKET ?? "excel-files";
 
@@ -165,11 +166,13 @@ export const createFlowSubscription = async (plan: string, skipTrial = false) =>
     "flow-create-subscription",
     { plan, skipTrial }
   );
+  track.subscriptionStarted();
   return data;
 };
 
 export const cancelFlowSubscription = async (subId: string) => {
   await invokeEdgeFunction("flow-cancel-subscription", { subscription_id: subId });
+  track.subscriptionCancelled();
 };
 
 export const fetchUserSubscription = async (userId: string): Promise<Subscription | null> => {
@@ -301,6 +304,7 @@ export const createCustomer = async (tenantId: string, payload: Partial<Customer
     .single();
 
   if (error) throw error;
+  track.customerCreated();
   return data;
 };
 
@@ -319,12 +323,14 @@ export const updateCustomer = async (id: string, payload: Partial<Customer>) => 
 export const deleteCustomer = async (id: string) => {
   const { error } = await supabase.from("customers").delete().eq("id", id);
   if (error) throw error;
+  track.customerDeleted();
 };
 
 export const deleteCustomersBatch = async (ids: string[]) => {
   if (ids.length === 0) return;
   const { error } = await supabase.from("customers").delete().in("id", ids);
   if (error) throw error;
+  track.customerBulkDeleted(ids.length);
 };
 
 // =========================
@@ -365,6 +371,7 @@ export const createAppointment = async (tenantId: string, payload: Partial<Appoi
     .single();
 
   if (error) throw error;
+  track.appointmentCreated();
   return data;
 };
 
@@ -377,6 +384,7 @@ export const updateAppointment = async (id: string, payload: Partial<Appointment
     .single();
 
   if (error) throw error;
+  track.appointmentUpdated();
   return data;
 };
 
@@ -473,10 +481,17 @@ export const analyzeImportFile = async (filePath: string, table: string) => {
 };
 
 export const importDataFromExcel = async (filePath: string, table: string, mapping?: Record<string, string>) => {
-  return invokeEdgeFunction<Record<string, unknown>, ImportResult>(
-    "import-data",
-    mapping ? { file_path: filePath, table, mapping } : { file_path: filePath, table }
-  );
+  try {
+    const result = await invokeEdgeFunction<Record<string, unknown>, ImportResult>(
+      "import-data",
+      mapping ? { file_path: filePath, table, mapping } : { file_path: filePath, table }
+    );
+    track.importCompleted(result.imported, result.skipped_duplicates, result.mapping_source);
+    return result;
+  } catch (err) {
+    track.importFailed();
+    throw err;
+  }
 };
 
 // =========================
