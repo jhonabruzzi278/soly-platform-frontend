@@ -1,5 +1,5 @@
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { fetchCustomersPaginated, createCustomer, updateCustomer, deleteCustomer } from "../lib/api";
+import { fetchCustomersPaginated, createCustomer, updateCustomer, deleteCustomer, deleteCustomersBatch } from "../lib/api";
 import { Customer } from "../lib/types";
 
 const PAGE_SIZE = 50;
@@ -38,6 +38,13 @@ export const useCustomers = (tenantId: string | undefined) => {
     }
   });
 
+  const deleteBatchMutation = useMutation({
+    mutationFn: (ids: string[]) => deleteCustomersBatch(ids),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["customers", tenantId] });
+    }
+  });
+
   const allCustomers = customersQuery.data?.pages.flatMap(page => page.data) ?? [];
   const lastPage = customersQuery.data?.pages[customersQuery.data.pages.length - 1];
   const hasMore = lastPage?.has_more ?? false;
@@ -53,8 +60,9 @@ export const useCustomers = (tenantId: string | undefined) => {
     createCustomer: createMutation.mutateAsync,
     updateCustomer: updateMutation.mutateAsync,
     deleteCustomer: deleteMutation.mutateAsync,
+    deleteCustomersBatch: deleteBatchMutation.mutateAsync,
     isCreating: createMutation.isPending,
     isUpdating: updateMutation.isPending,
-    isDeleting: deleteMutation.isPending
+    isDeleting: deleteMutation.isPending || deleteBatchMutation.isPending
   };
 };

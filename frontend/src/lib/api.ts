@@ -321,6 +321,12 @@ export const deleteCustomer = async (id: string) => {
   if (error) throw error;
 };
 
+export const deleteCustomersBatch = async (ids: string[]) => {
+  if (ids.length === 0) return;
+  const { error } = await supabase.from("customers").delete().in("id", ids);
+  if (error) throw error;
+};
+
 // =========================
 // Appointments
 // =========================

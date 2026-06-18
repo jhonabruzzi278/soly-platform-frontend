@@ -29,6 +29,7 @@ export const CustomersPage = () => {
     createCustomer,
     updateCustomer,
     deleteCustomer,
+    deleteCustomersBatch,
     isCreating,
     isUpdating,
     isDeleting
@@ -38,6 +39,23 @@ export const CustomersPage = () => {
   const [editing, setEditing] = useState<Customer | null>(null);
   const [form, setForm] = useState<Partial<Customer>>(emptyCustomer());
   const [feedback, setFeedback] = useState<{ tone: "default" | "danger"; title: string; description: string } | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  const allSelected = customers.length > 0 && selectedIds.size === customers.length;
+  const someSelected = selectedIds.size > 0 && !allSelected;
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    setSelectedIds(allSelected ? new Set() : new Set(customers.map((c) => c.id)));
+  };
 
   const openCreate = () => {
     setEditing(null);
@@ -69,15 +87,53 @@ export const CustomersPage = () => {
   };
 
   const remove = async (id: string, name: string) => {
-    if (!window.confirm(`Eliminar a "${name}"?`)) return;
+    if (!window.confirm(`¿Eliminar a "${name}"?`)) return;
     try {
       await deleteCustomer(id);
+      setSelectedIds((prev) => { const next = new Set(prev); next.delete(id); return next; });
     } catch (err) {
       setFeedback({ tone: "danger", title: "Error", description: err instanceof Error ? err.message : "No se pudo eliminar." });
     }
   };
 
+  const handleBulkDelete = async () => {
+    const ids = [...selectedIds];
+    if (!window.confirm(`¿Eliminar ${ids.length} cliente${ids.length !== 1 ? "s" : ""}? Esta acción no se puede deshacer.`)) return;
+    setFeedback(null);
+    try {
+      await deleteCustomersBatch(ids);
+      setSelectedIds(new Set());
+    } catch (err) {
+      setFeedback({ tone: "danger", title: "Error al eliminar", description: err instanceof Error ? err.message : "No se pudieron eliminar los clientes." });
+    }
+  };
+
   const columns = [
+    {
+      key: "select",
+      title: (
+        <input
+          type="checkbox"
+          checked={allSelected}
+          ref={(el) => { if (el) el.indeterminate = someSelected; }}
+          onChange={toggleSelectAll}
+          className="h-4 w-4 cursor-pointer accent-[var(--primary)]"
+          aria-label="Seleccionar todos"
+        />
+      ),
+      headerClassName: "w-10",
+      cellClassName: "w-10",
+      render: (r: Customer) => (
+        <input
+          type="checkbox"
+          checked={selectedIds.has(r.id)}
+          onChange={() => toggleSelect(r.id)}
+          onClick={(e) => e.stopPropagation()}
+          className="h-4 w-4 cursor-pointer accent-[var(--primary)]"
+          aria-label={`Seleccionar ${r.name}`}
+        />
+      )
+    },
     { key: "name", title: "Nombre", render: (r: Customer) => <span className="font-medium">{r.name}</span> },
     { key: "email", title: "Email", render: (r: Customer) => r.email ?? "-" },
     { key: "phone", title: "Telefono", render: (r: Customer) => r.phone ?? "-" },
@@ -85,7 +141,8 @@ export const CustomersPage = () => {
     { key: "total_appointments", title: "Citas", render: (r: Customer) => String(r.total_appointments ?? 0) },
     { key: "last_appointment", title: "Ultima cita", render: (r: Customer) => shortDate(r.last_appointment_at) },
     {
-      key: "actions", title: "Acciones",
+      key: "actions",
+      title: "Acciones",
       render: (r: Customer) => (
         <div className="flex gap-1">
           <Button variant="ghost" size="sm" onClick={() => openEdit(r)}>
@@ -114,6 +171,36 @@ export const CustomersPage = () => {
 
       {feedback ? <SurfaceMessage tone={feedback.tone} title={feedback.title} description={feedback.description} /> : null}
       {error ? <SurfaceMessage tone="danger" title="Error" description={error.message} /> : null}
+
+      {selectedIds.size > 0 && (
+        <div className="flex items-center gap-3 rounded-xl bg-[var(--muted)] px-4 py-2.5 shadow-[var(--neu-shadow-pressed)]">
+          <span className="text-sm font-medium">
+            {selectedIds.size} seleccionado{selectedIds.size !== 1 ? "s" : ""}
+          </span>
+          <button
+            type="button"
+            onClick={toggleSelectAll}
+            className="text-xs text-[var(--muted-foreground)] underline-offset-2 hover:underline"
+          >
+            {allSelected ? "Deseleccionar todos" : "Seleccionar todos"}
+          </button>
+          <div className="ml-auto flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())}>
+              Cancelar
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-[var(--destructive)]"
+              onClick={() => void handleBulkDelete()}
+              disabled={isDeleting}
+            >
+              <MaterialIcon name="delete" size={16} />
+              {isDeleting ? "Eliminando..." : `Eliminar ${selectedIds.size}`}
+            </Button>
+          </div>
+        </div>
+      )}
 
       {isLoading ? (
         <p className="text-sm text-[var(--muted-foreground)]">Cargando clientes...</p>
