@@ -181,7 +181,7 @@ export const BillingPage = () => {
             {loading === "pay" ? (
               <><MaterialIcon name="progress_activity" size={16} className="animate-spin" />Procesando...</>
             ) : (
-              <><MaterialIcon name="credit_card" size={16} />Reintentar pago · $49.000/mes</>
+              <><MaterialIcon name="credit_card" size={16} />Reintentar pago · $23.000/mes · IVA incluido</>
             )}
           </Button>
         </div>
@@ -265,9 +265,9 @@ export const BillingPage = () => {
           <div className="p-6 space-y-5">
             {/* Price hero */}
             <div className="flex items-end gap-3">
-              <p className="text-5xl font-bold tracking-tight tabular-nums">$49.000</p>
+              <p className="text-5xl font-bold tracking-tight tabular-nums">$23.000</p>
               <div className="pb-1 text-sm text-[var(--muted-foreground)] leading-snug">
-                CLP<br />/ mes
+                CLP<br />/ mes · IVA incluido
               </div>
             </div>
 
@@ -314,7 +314,7 @@ export const BillingPage = () => {
                 ) : (
                   <>
                     <MaterialIcon name="credit_card" size={18} />
-                    Pagar ahora · $49.000/mes
+                    Pagar ahora · $23.000/mes · IVA incluido
                   </>
                 )}
               </Button>

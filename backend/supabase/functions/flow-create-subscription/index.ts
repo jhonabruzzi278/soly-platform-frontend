@@ -6,7 +6,8 @@ import { flowPost, FlowPayResponse, FlowCustomer } from '../_shared/flow.ts'
 const VALID_PLANS = ['business'] as const
 type PlanKey = typeof VALID_PLANS[number]
 
-const PLAN_AMOUNT: Record<PlanKey, string> = { business: '49000' }
+// Final CLP amount includes IVA; do not add tax again.
+const PLAN_AMOUNT: Record<PlanKey, string> = { business: '23000' }
 const TRIAL_DAYS = 14
 
 Deno.serve(async (req) => {

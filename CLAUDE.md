@@ -83,7 +83,9 @@ Shared utilities in `_shared/`: `cors.ts`, `rate-limit.ts`, `flow.ts` (Flow API 
 
 ### Database migrations (`backend/supabase/migrations/`)
 
-Sequential numbered SQL files (`0001_foundation.sql` … `0026_…`). All tenant data is isolated via `tenant_id` + RLS policies. Key tables: `tenants`, `memberships`, `profiles`, `subscriptions`, `customers`, `appointments`, `ai_settings`. Key RPCs: `get_user_session`, `get_dashboard_kpis`, `has_active_subscription`, `get_customers_paginated`, `get_appointments_paginated`.
+Sequential numbered SQL files (`0001_foundation.sql` … `0027_…`). All tenant data is isolated via `tenant_id` + RLS policies. Key tables: `tenants`, `memberships`, `profiles`, `subscriptions`, `customers`, `appointments`, `ai_settings`. Key RPCs: `get_user_session`, `get_dashboard_kpis`, `has_active_subscription`, `get_customers_paginated`, `get_appointments_paginated`.
+
+`subscriptions.status` valid values: `trialing`, `active`, `cancelled`, `expired`, `pending_payment`.
 
 ## Environment Variables
 
@@ -94,6 +96,7 @@ VITE_SUPABASE_URL=
 VITE_SUPABASE_ANON_KEY=
 VITE_SUPABASE_BUCKET=excel-files
 VITE_PUBLIC_APP_URL=https://tu-dominio.com
+VITE_SENTRY_DSN=          # optional; enables Sentry error reporting
 ```
 
 ## Key Conventions

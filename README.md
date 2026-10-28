@@ -47,7 +47,7 @@ soly/
 │
 ├── backend/
 │   └── supabase/
-│       ├── migrations/          # 0001…0026 SQL secuenciales
+│       ├── migrations/          # 0001…0027 SQL secuenciales
 │       ├── functions/           # Edge Functions (Deno)
 │       │   ├── _shared/         # cors.ts, rate-limit.ts, flow.ts, utils.ts
 │       │   ├── create-organization/
@@ -121,7 +121,7 @@ Todas las tablas tienen `tenant_id uuid NOT NULL REFERENCES tenants(id)` y polí
 | `tenants` | Una fila por organización (slug, plan, branding) |
 | `memberships` | Users ↔ tenants con roles `owner/admin/member/viewer` |
 | `profiles` | Datos públicos del usuario (nombre, email) |
-| `subscriptions` | Suscripciones por producto/plan (status: `trialing/active/cancelled/expired`) |
+| `subscriptions` | Suscripciones por producto/plan (status: `trialing/active/cancelled/expired/pending_payment`) |
 | `customers` | Clientes del tenant; con rollup `total_spent`, `total_appointments` |
 | `appointments` | Citas; cascade delete desde customers |
 | `ai_settings` | API key de IA (write-only a nivel DB), provider, modelo |
@@ -169,7 +169,8 @@ Archivos SQL numerados secuencialmente. Aplicar en orden con `supabase db push` 
 | `0022–0023` | Fix trigger rollup, slugs únicos, auto-trial |
 | `0024` | Tabla `ai_settings` |
 | `0025` | Fix: cascade delete de clientes con citas |
-| `0026` | Fix: `json_agg` con `WITH ORDINALITY` en RPCs paginados |
+| `0026` | Billing: status `pending_payment` en tabla `subscriptions` |
+| `0027` | Fix: `json_agg` con `WITH ORDINALITY` en RPCs paginados |
 
 ### Edge Functions (`backend/supabase/functions/`)
 
@@ -310,6 +311,7 @@ VITE_SUPABASE_URL=https://<tu-project>.supabase.co
 VITE_SUPABASE_ANON_KEY=<anon-key>
 VITE_SUPABASE_BUCKET=excel-files
 VITE_PUBLIC_APP_URL=https://tu-dominio.com
+VITE_SENTRY_DSN=<dsn>          # opcional; habilita Sentry error reporting
 ```
 
 ```bash
@@ -342,6 +344,7 @@ npm run test:coverage
 | `VITE_SUPABASE_ANON_KEY` | Anon/public key de Supabase |
 | `VITE_SUPABASE_BUCKET` | Nombre del bucket Storage (`excel-files`) |
 | `VITE_PUBLIC_APP_URL` | URL pública de la app |
+| `VITE_SENTRY_DSN` | DSN de Sentry (opcional; omitir deshabilita el SDK) |
 
 ### Backend (Edge Functions secrets)
 
@@ -453,3 +456,19 @@ npm run test:coverage   # con reporte de cobertura
 ## Licencia
 
 Privado — uso interno.
+
+---
+
+## 📋 Documentación del Proyecto (AI-DLC)
+
+Este proyecto sigue la metodología AI-DLC. Estado actual: **Operations (Early / Maturing)** — construcción completa y funcional, monitoreo (Sentry) recién implementado; sin runbooks formales, SLA, ni IaC más allá de configuración declarativa.
+
+Documentación completa en [`/aidlc-docs/`](./aidlc-docs/):
+- [Requirements](./aidlc-docs/requirements/)
+- [User Stories & Acceptance Criteria](./aidlc-docs/story-artifacts/)
+- [Architecture](./aidlc-docs/design-artifacts/ARCHITECTURE.md) · [Domain Model](./aidlc-docs/design-artifacts/DOMAIN_MODEL.md) · [ADRs](./aidlc-docs/design-artifacts/ADR/)
+- [Testing Strategy](./aidlc-docs/testing/TEST_STRATEGY.md)
+- [Deployment](./aidlc-docs/deployment/)
+- [Operations](./aidlc-docs/operations/) — monitoring, SLA, incident runbooks
+
+Última auditoría: 2026-07-19

@@ -17,8 +17,8 @@ export const PLAN_LIMITS: Record<PlanKey, { seats: number; files: number; featur
 export const PLAN_META: Record<PlanKey, { label: string; price: number; priceLabel: string; description: string }> = {
   business: {
     label: "Soly Business",
-    price: 49000,
-    priceLabel: "$49.000/mes",
+    price: 23000,
+    priceLabel: "$23.000/mes · IVA incluido",
     description: "CRM completo para tu negocio. Todas las features incluidas."
   }
 };

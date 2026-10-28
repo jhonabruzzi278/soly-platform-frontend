@@ -89,7 +89,7 @@ export const LandingPage = () => (
             className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-[var(--primary)]/40 bg-[var(--card)] px-6 text-sm font-semibold text-[var(--primary)] shadow-[var(--neu-shadow-raised)] transition-all hover:border-[var(--primary)]/70 active:scale-[0.97] sm:w-auto"
           >
             <MaterialIcon name="credit_card" size={17} />
-            Suscribirse · $49.000/mes
+            Suscribirse · $23.000/mes · IVA incluido
           </Link>
         </div>
 
@@ -146,8 +146,8 @@ export const LandingPage = () => (
           </div>
           <div className="p-6 space-y-5">
             <div className="flex items-end gap-2">
-              <span className="text-5xl font-bold tracking-tight tabular-nums">$49.000</span>
-              <span className="pb-1 text-sm text-[var(--muted-foreground)] leading-snug">CLP<br />/ mes</span>
+              <span className="text-5xl font-bold tracking-tight tabular-nums">$23.000</span>
+              <span className="pb-1 text-sm text-[var(--muted-foreground)] leading-snug">CLP<br />/ mes · IVA incluido</span>
             </div>
 
             <ul className="grid grid-cols-2 gap-y-2.5 gap-x-4">
@@ -175,7 +175,7 @@ export const LandingPage = () => (
                 className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[var(--primary)] text-sm font-semibold text-[var(--primary-foreground)] shadow-[var(--neu-shadow-raised)] transition-all hover:opacity-90 active:scale-[0.97]"
               >
                 <MaterialIcon name="credit_card" size={16} />
-                Pagar ahora · $49.000/mes
+                Pagar ahora · $23.000/mes · IVA incluido
               </Link>
             </div>
 
